@@ -15,8 +15,8 @@ import { useRouter } from 'next/router';
 
 let rap: any = {}
 let remoteMusicLoc = "http://localhost"
-const wsHost = 'wss://skippies.fun/music/ws'
-//const wsHost = "ws://localhost:8081"
+//const wsHost = 'wss://skippies.fun/music/ws'
+const wsHost = "ws://localhost:8081"
 
 
 
@@ -49,7 +49,6 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const [joined, setJoined] = useState(false)
     const [timestamp, setTimeStamp] = useState(0)
     const [maxTimestamp, setMaxTimestamp] = useState(0)
-    const [allowUpdate, setAllowUpdate] = useState(true)
     const [currentSong, setCurrentSong] = useState("Select a song!")
     const [songList, setSongList] = useState<any>(false)
     const [currentSongUrl, setCurrentSongUrl] = useState("")
@@ -57,13 +56,24 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const [previousSongs, setPreviousSongs] = useState<string[]>([])
     const [sessionId, setSessionId] = useState<any>("")
     const [wsLogin, setWsLogin] = useState(false)
-    const [allowWsSongUpdate, setAllowWsSongUpdate] = useState(false)
     const [wsReady, setWsReady] = useState(false)
     const [client, setClient] = useState<W3CWebSocket>()
     const [modalShow, setModalShow] = useState(false)
     const [sessionUserId, setSessionUserId] = useState("")
-    const [allowWsPlayingUpdate, setAllowWsPlayingUpdate] = useState(false)
-    const [playRateLimit, setPlayRateLimit] = useState(0)
+    const [audioPlayer, setAudioPlayer] = useState(<>
+        <ReactAudioPlayer
+            ref={(element) => { console.log("updated rap variable"); rap = element; }}
+            src={currentSongUrl}
+            autoPlay
+            listenInterval={250}
+            onListen={(e) => { /* update timestamp */ }}
+            onPause={(e) => { setPlayerStatus("paused") }}
+            onPlay={(e) => { setPlayerStatus("playing") }}
+            preload={"metadata"}
+            controls
+            style={{ "display": "none" }}
+        />
+    </>)
 
 
 
@@ -173,9 +183,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                 type: typeDefinition.LOGIN
             }));
         }
-        setAllowWsSongUpdate(true)
         setWsLogin(true)
-        setAllowWsPlayingUpdate(true)
     }
 
 
@@ -219,15 +227,19 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     }, [status, wsReady])
 
 
-    // update display of timestamp and song name
+    // update display of song name
     useEffect(() => {
-    }, [timestamp, currentSongUrl])
+    }, [])
+
+    // update display of timestamp and max timestamp
+    useEffect(() => {
+    }, [])
 
 
 
     // check for song end -> if ends play a new song
     useEffect(() => {
-    }, [allowUpdate])
+    }, [])
 
 
     return (
@@ -254,18 +266,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             <div className='absolute-wrap'>
                                 <div className="text-center my-4 container">
                                     <p>{currentSong}</p>
-                                    <ReactAudioPlayer
-                                        ref={(element) => { rap = element; }}
-                                        src={currentSongUrl}
-                                        autoPlay
-                                        listenInterval={100}
-                                        onListen={(e) => { /* update timestamp */}}
-                                        onPause={(e) => { setPlayerStatus("paused") }}
-                                        onPlay={(e) => { setPlayerStatus("playing") }}
-                                        preload={"auto"}
-                                        controls
-                                        style={{ "display": "none" }}
-                                    />
+                                    {audioPlayer}
                                     <h1>{secondsToString(Math.floor(timestamp))} / {secondsToString(Math.floor(maxTimestamp))}</h1>
 
                                     <Slider
@@ -284,18 +285,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                     />
 
                                     <div className="m-2">
-                                        {allowWsPlayingUpdate ? <>
-                                            {previousSongs.length > 1 ?
-                                                <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={previousSong}></FontAwesomeIcon> : null}
-                                            {(playerStatus == "idle" || playerStatus == "paused") ?
-                                                <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={play}></FontAwesomeIcon>
-                                                :
-                                                <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={pause}></FontAwesomeIcon>
-                                            }
-                                            <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={nextSong}></FontAwesomeIcon>
-                                        </> : <>
-                                            <p>...</p>
-                                        </>}
+                                        {previousSongs.length > 1 ?
+                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={previousSong}></FontAwesomeIcon> : null}
+                                        {(playerStatus == "idle" || playerStatus == "paused") ?
+                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={play}></FontAwesomeIcon>
+                                            :
+                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={pause}></FontAwesomeIcon>
+                                        }
+                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={nextSong}></FontAwesomeIcon>
                                     </div>
 
                                 </div>
@@ -401,7 +398,7 @@ function SongList({ list, setter, currentSong, timestampSetter, prevSetter, prev
 
 function Song({ file, setter, currentSong, timestampSetter, prevSetter, prev }: any) {
     return <>
-        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => {  /* play song */}}></FontAwesomeIcon></td></tr>
+        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => {  /* play song */ }}></FontAwesomeIcon></td></tr>
     </>
 }
 
