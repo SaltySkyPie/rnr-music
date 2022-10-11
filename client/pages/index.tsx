@@ -161,20 +161,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     }, [client, joined])
 
 
-
-    useEffect(() => {
-        console.log(wsLogin, allowWsSongUpdate)
-        if (wsLogin && allowWsSongUpdate) {
-            client!.send(JSON.stringify({ type: typeDefinition.SONG_UPDATE, songUrl: currentSongUrl, sessionId: sessionId, username: data!.user!.name! }))
-        }
-    }, [currentSongUrl])
-
-
-    useEffect(() => {
-        console.log("changed allowWsSongUpdate:", allowWsSongUpdate)
-    }, [allowWsSongUpdate])
-
-
+    // login user to WS server after connection
     const logInUser = () => {
         const username = data!.user!.name!;
         if (username.trim()) {
@@ -191,6 +178,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         setAllowWsPlayingUpdate(true)
     }
 
+
+    // WS message processing
     useEffect(() => {
         if (status === "authenticated" && wsReady) {
             logInUser();
@@ -203,32 +192,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                 switch (dat.type) {
                     case typeDefinition.PLAY:
                         if (dat.userId != sessionUserId) {
-                            setAllowWsPlayingUpdate(false)
-                            if (dat.data.songUrl != currentSongUrl && allowUpdate) {
-                                setAllowUpdate(false)
-                                setCurrentSongUrl(dat.data.songUrl)
-                                setAllowUpdate(true)
-                            }
-                            rap.audioEl.current.currentTime = parseFloat(dat.data.timestamp)
-                            rap.audioEl.current.play()
-                            setTimeout(() => { setAllowWsPlayingUpdate(true) }, 500)
                         }
                         break
                     case typeDefinition.PAUSE:
                         if (dat.userId != sessionUserId) {
-                            setAllowWsPlayingUpdate(false)
-                            rap.audioEl.current.pause()
-                            setTimeout(() => { setAllowWsPlayingUpdate(true) }, 500)
                         }
                         break
                     case typeDefinition.SONG_UPDATE:
                         if (dat.userId != sessionUserId) {
-                            setAllowWsSongUpdate(false)
-                            setCurrentSongUrl(dat.data.songUrl)
-                            rap.audioEl.current.currentTime = 0 as number;
-                            rap.audioEl.current.play()
-                            setTimeStamp(0)
-                            setTimeout(() => { setAllowWsSongUpdate(true) }, 500)
                         }
                         break
                     case typeDefinition.MESSAGE:
@@ -248,37 +219,15 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     }, [status, wsReady])
 
 
+    // update display of timestamp and song name
     useEffect(() => {
-        if (allowUpdate) {
-            setMaxTimestamp(getSafe(() => rap.audioEl.current.duration, 0))
-            setCurrentSong((getSafe(() => decodeURI(rap.audioEl.current.currentSrc), "/music/Select a song!")).split("/music/")[1])
-
-
-        }
     }, [timestamp, currentSongUrl])
 
+
+
+    // check for song end -> if ends play a new song
     useEffect(() => {
-
-        console.log(previousSongs, timestamp, maxTimestamp, Math.abs(maxTimestamp - timestamp), 1e-4 * timestamp * maxTimestamp)
-        if (Math.abs(maxTimestamp - timestamp) <= 1e-4 * timestamp * maxTimestamp && rap.audioEl && allowUpdate) {
-            console.log("Trig")
-            setTimeout(() => {
-                setPreviousSongs([...previousSongs, currentSongUrl]);
-                setCurrentSongUrl(`${remoteMusicLoc}/${songList[Math.floor(Math.random() * songList.length)]}`)
-                rap.audioEl.current.currentTime = 0
-                setTimeStamp(0)
-                rap.audioEl.current.play()
-            }, 120 + Math.floor(Math.random() * 501))
-        }
-
-        if (playerStatus === "playing" && allowUpdate) {
-            play()
-        }
-
-        if (playerStatus === "paused" && allowUpdate) {
-            pause()
-        }
-    }, [playerStatus, allowUpdate])
+    }, [allowUpdate])
 
 
     return (
@@ -309,8 +258,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                         ref={(element) => { rap = element; }}
                                         src={currentSongUrl}
                                         autoPlay
-                                        listenInterval={500}
-                                        onListen={(e) => { allowUpdate ? setTimeStamp(e) : "" }}
+                                        listenInterval={100}
+                                        onListen={(e) => { /* update timestamp */}}
                                         onPause={(e) => { setPlayerStatus("paused") }}
                                         onPlay={(e) => { setPlayerStatus("playing") }}
                                         preload={"auto"}
@@ -328,14 +277,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                         ariaValueTextFormatterForHandle={(value) => { return secondsToString(Math.floor(value)) }}
                                         ariaLabelledByForHandle={`${timestamp}`}
                                         included={true}
-                                        onBeforeChange={() => { setAllowUpdate(false); setAllowWsPlayingUpdate(false); rap.audioEl.current.pause(); pause(); }}
-                                        onAfterChange={() => { setTimeout(() => { rap.audioEl.current.play(); play(); setAllowUpdate(true); setAllowWsPlayingUpdate(true); }, 500) }}
-                                        onChange={(value) => { console.log("Slider value: ", value, "Timestamp useState:", timestamp, "Player Time:", rap.audioEl.current.currentTime); rap.audioEl.current.currentTime = value as number; setTimeStamp(value as number); }}
+                                        onBeforeChange={() => { /* before onChange */ }}
+                                        onAfterChange={() => { /* after onChange */ }}
+                                        onChange={(value) => { /* slider change */ }}
                                         style={{ "width": "80%", "margin": "0 auto" }}
                                     />
 
                                     <div className="m-2">
-                                        {allowWsPlayingUpdate && playRateLimit <= 2 ? <>
+                                        {allowWsPlayingUpdate ? <>
                                             {previousSongs.length > 1 ?
                                                 <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={previousSong}></FontAwesomeIcon> : null}
                                             {(playerStatus == "idle" || playerStatus == "paused") ?
@@ -353,7 +302,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             </div>
                             <div className="text-center login-container">
                                 <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
-                                <p>Session ID: {sessionId} <Button size="sm" onClick={() => { if (navigator) { navigator.share({ title: `Join session ${sessionId} | TŠ TWIST MUSIC SYSTEM`, text: `Join session ${sessionId} with this link`, url: `http://${host}/?join=${sessionId}`, }) } }}>Share</Button>{' '}<Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`); setSessionId(""); }} size="sm">Leave</Button></p>
+                                <p>Session ID: {sessionId} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`); setSessionId(""); }} size="sm">Leave</Button></p>
                             </div>
                             <div className="text-center songlist">
                                 <Table striped bordered hover>
@@ -452,7 +401,7 @@ function SongList({ list, setter, currentSong, timestampSetter, prevSetter, prev
 
 function Song({ file, setter, currentSong, timestampSetter, prevSetter, prev }: any) {
     return <>
-        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => { if (currentSong != `${remoteMusicLoc}/${file}`) { prevSetter([...prev, currentSong]); setter(`${remoteMusicLoc}/${file}`); } else { rap.audioEl.current.currentTime = 0 as number; rap.audioEl.current.play(); timestampSetter(0) } }}></FontAwesomeIcon></td></tr>
+        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => {  /* play song */}}></FontAwesomeIcon></td></tr>
     </>
 }
 
