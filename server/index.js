@@ -1,44 +1,92 @@
-const webSocketsServerPort = 8081;
+require('dotenv').config()
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const webSocketsServerPort = process.env.PORT;
 const webSocketServer = require('websocket').server;
 const http = require('http');
-// Spinning the http server and the websocket server.
+const { getAudioDurationInSeconds } = require('get-audio-duration')
 const server = http.createServer();
 server.listen(webSocketsServerPort);
 const wsServer = new webSocketServer({
     httpServer: server
 });
 
-// Generates unique ID for every new connection
+
+const LOCAL_MUSIC = process.env.LOCAL_MUSIC
+const REMOTE_MUSIC = process.env.REMOTE_MUSIC
+
+console.log("Server started at port", webSocketsServerPort)
+
 const getUniqueID = () => {
     const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
     return s4() + s4() + '-' + s4();
 };
-
-// I'm maintaining all active connections in this object
-const clients = {};
-// I'm maintaining all active users in this object
-let users = {};
-// The current editor content is maintained here.
-let dataHolder = null;
-
-
-
-const sendMessage = (json, excludeSender = false, senderId = 0) => {
-    // We are sending the current data to all connected clients
-    Object.keys(clients).map((client) => {
-        if(!excludeSender || client != senderId)
-        clients[client].sendUTF(json);
-    });
-    console.log("Sent:", json)
-}
 
 const typeDefinition = {
     LOGIN: "login",
     PAUSE: "pause",
     PLAY: "play",
     SONG_UPDATE: "song_update",
+    TIME_UPDATE: "time_update",
     MESSAGE: "msg"
 }
+const clients = {};
+let users = {};
+let sessionData = {};
+let songList = []
+
+async function updateSongList() {
+    songList = await (await fetch(process.env.SONG_LIST)).json()
+}
+updateSongList()
+setInterval(updateSongList, 60000)
+
+/* 
+sessionData = {
+           sessionId: {
+                id: any,
+                currentSongUrl: string,
+                songTimestamp: number,
+                songMaxTimestamp: number,
+                songState: "playing" | "paused" | "idle",
+                connectedUsers: {usrId: {}, usrId2: {},...}
+            },....}
+*/
+
+
+const updateSessions = () => {
+
+    Object.keys(sessionData).forEach((key) => {
+        //console.log(sessionData[key])
+        if (sessionData[key].songState == "playing") {
+            sessionData[key].songTimestamp++;
+        } else if (sessionData[key].songState == "paused") {
+            if (sessionData[key].songTimestamp >= sessionData[key].songMaxTimestamp - 1) {
+                const s = songList[Math.floor(Math.random() * songList.length)]
+                sessionData[key].currentSongUrl = REMOTE_MUSIC + "/" + s
+                sessionData[key].songState = "playing"
+                sessionData[key].songTimestamp = 0
+                getAudioDurationInSeconds(LOCAL_MUSIC + "/" + s).then((duration) => {
+                    sessionData[key].songMaxTimestamp = duration
+                    sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, sessionId: key, data: { songUrl: sessionData[key].currentSongUrl, by: "server", sessionData: sessionData[key] } }))
+                })
+            }
+        }
+
+    });
+
+}
+
+
+
+const sendMessage = (json) => {
+    Object.keys(clients).map((client) => {
+        clients[client].sendUTF(json);
+    });
+    console.log("Sent:", json)
+}
+
+setInterval(updateSessions, 1000)
+
 
 wsServer.on('request', function (request) {
     var userID = getUniqueID();
@@ -48,46 +96,83 @@ wsServer.on('request', function (request) {
     console.log('connected: ' + userID + ' in ' + Object.getOwnPropertyNames(clients));
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
-            //console.log(users)
             const dataFromClient = JSON.parse(message.utf8Data);
+            console.log("Session Data:", sessionData)
             console.log("Received:", dataFromClient)
-            //console.log(users)
             switch (dataFromClient.type) {
                 case typeDefinition.LOGIN:
-                    /*users[userID].username = dataFromClient.username
-                    users[userID].sessionId = dataFromClient.sessionId*/
                     users[userID] = {
                         id: userID,
                         username: dataFromClient.username,
                         sessionId: dataFromClient.sessionId
                     }
-                    clients[userID].sendUTF(JSON.stringify({type: typeDefinition.LOGIN, userId: users[userID].id, sessionId: users[userID].sessionId, data: { userId: userID }}))
-                    sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: users[userID].sessionId, data: { message: `${users[userID].username} joined the session!` } }))
+
+                    if (users[userID].sessionId in sessionData) {
+                        sessionData[users[userID].sessionId].connectedUsers[users[userID].id] = users[userID]
+                    } else {
+                        // init session in obj
+                        sessionData[users[userID].sessionId] = {
+                            id: users[userID].sessionId,
+                            currentSongUrl: "",
+                            songTimestamp: 0,
+                            songMaxTimestamp: 0,
+                            songState: "idle",
+                            connectedUsers: {}
+                        }
+                        sessionData[users[userID].sessionId].connectedUsers[users[userID].id] = users[userID]
+                        console.log("Session Data:", sessionData)
+                    }
+
+                    console.log(`Session ${users[userID].sessionId} connected users:`, sessionData[users[userID].sessionId].connectedUsers)
+                    clients[userID].sendUTF(JSON.stringify({ type: typeDefinition.LOGIN, userId: users[userID].id, sessionId: users[userID].sessionId, data: { userId: userID, sessionData: sessionData[users[userID].sessionId] } }))
+                    sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: users[userID].sessionId, data: { message: `${users[userID].username} joined the session!`, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PLAY:
-                    sendMessage(JSON.stringify({ type: typeDefinition.PLAY, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, timestamp: dataFromClient.timestamp, songUrl: dataFromClient.songUrl } }))
+                    sessionData[users[userID].sessionId].songState = "playing"
+                    sendMessage(JSON.stringify({ type: typeDefinition.PLAY, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PAUSE:
-                    sendMessage(JSON.stringify({ type: typeDefinition.PAUSE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username } }), true, users[userID].id)
+                    sessionData[users[userID].sessionId].songState = "paused"
+                    sendMessage(JSON.stringify({ type: typeDefinition.PAUSE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.SONG_UPDATE:
-                    sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { songUrl: dataFromClient.songUrl, by: users[userID].username } }), true, users[userID].id)
+                    getAudioDurationInSeconds(LOCAL_MUSIC + "/" + dataFromClient.fileName).then((duration) => {
+                        console.log(duration)
+                        sessionData[users[userID].sessionId].songState = "playing"
+                        sessionData[users[userID].sessionId].songTimestamp = 0
+                        sessionData[users[userID].sessionId].songMaxTimestamp = duration
+                        sessionData[users[userID].sessionId].currentSongUrl = dataFromClient.songUrl
+                        sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { songUrl: dataFromClient.songUrl, by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
+                    })
                     break
+                case typeDefinition.TIME_UPDATE:
+                    sessionData[users[userID].sessionId].songTimestamp = dataFromClient.timestamp
+                    sendMessage(JSON.stringify({ type: typeDefinition.TIME_UPDATE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { songUrl: dataFromClient.songUrl, by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
+                    break;
                 case typeDefinition.MESSAGE:
-                    sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, userId: users[userID].id, data: { message: dataFromClient.message } }))
+                    sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, userId: users[userID].id, data: { message: dataFromClient.message, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 default:
                     break
             }
-            //sendMessage(JSON.stringify(dataFromClient));
         }
     });
-    // user disconnected
     connection.on('close', function (connection) {
         console.log((new Date()) + " Peer " + userID + " disconnected.");
 
-        if (users[userID] && users[userID] != undefined && users[userID].sessionId != undefined && users[userID].username != undefined) { sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: users[userID].sessionId, data: { message: `${users[userID].username} left the session!` } })); }
+        let tmp = users[userID].username
+        let tmp2 = sessionData[users[userID].sessionId]
+        let tmp3 = users[userID].sessionId
+        delete sessionData[users[userID].sessionId].connectedUsers[userID]
+
+        if (Object.keys(sessionData[users[userID].sessionId].connectedUsers).length <= 0) {
+            delete sessionData[users[userID].sessionId]
+        }
+
         delete clients[userID];
         delete users[userID];
+
+        sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: tmp3, data: { message: `${tmp} left the session!`, sessionData: tmp2 } }))
+        console.log("Session Data:", sessionData)
     });
 });

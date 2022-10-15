@@ -2,7 +2,7 @@ import type { NextPage } from 'next'
 import Image from 'react-bootstrap/Image'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFacebook, faGoogle, faInstagram } from "@fortawesome/free-brands-svg-icons";
-import { faPlay, faPause, faForwardFast, faBackwardFast } from "@fortawesome/free-solid-svg-icons"
+import { faPlay, faPause, faForwardFast, faBackwardFast, faUser } from "@fortawesome/free-solid-svg-icons"
 import { useSession, signIn, signOut } from "next-auth/react"
 import { Button, Form, Modal } from 'react-bootstrap';
 import { useEffect, useRef, useState } from 'react';
@@ -43,11 +43,11 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     remoteMusicLoc = remoteMusic
 
     const getUniqueID = () => {
-        return Math.floor(5000 + Math.random() * 9000);
+        return Math.floor(1000 + Math.random() * 9000);
     };
 
     const [joined, setJoined] = useState(false)
-    const [timestamp, setTimeStamp] = useState(0)
+    const [timestamp, setTimestamp] = useState(0)
     const [maxTimestamp, setMaxTimestamp] = useState(0)
     const [currentSong, setCurrentSong] = useState("Select a song!")
     const [songList, setSongList] = useState<any>(false)
@@ -60,20 +60,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const [client, setClient] = useState<W3CWebSocket>()
     const [modalShow, setModalShow] = useState(false)
     const [sessionUserId, setSessionUserId] = useState("")
-    const [audioPlayer, setAudioPlayer] = useState(<>
-        <ReactAudioPlayer
-            ref={(element) => { console.log("updated rap variable"); rap = element; }}
-            src={currentSongUrl}
-            autoPlay
-            listenInterval={250}
-            onListen={(e) => { /* update timestamp */ }}
-            onPause={(e) => { setPlayerStatus("paused") }}
-            onPlay={(e) => { setPlayerStatus("playing") }}
-            preload={"metadata"}
-            controls
-            style={{ "display": "none" }}
-        />
-    </>)
+    const [activeUsers, setActiveUsers] = useState(0)
+    const [sliderInteraction, setSliderInteraction] = useState(false)
+    const [sliderValue, setSliderValue] = useState(0)
 
 
 
@@ -83,24 +72,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         PAUSE: "pause",
         PLAY: "play",
         SONG_UPDATE: "song_update",
-        MESSAGE: "msg"
-    }
-
-    // set next song on button click
-    const nextSong = () => {
-    }
-
-    // set prev. song on button click
-    const previousSong = () => {
-
-    }
-
-    // change or resume song
-    const play = () => {
-    }
-
-    // pause song
-    const pause = () => {
+        TIME_UPDATE: "time_update",
+        MESSAGE: "msg",
     }
 
     // show invite modal on load with link
@@ -138,9 +111,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     useEffect(() => {
         if (joined && client != undefined) {
             client!.onopen = () => {
-                console.log(`Connected to ${wsHost}`)
+                console.log(`Connected to ${wsHost}!`)
                 setWsReady(true)
-                toast.success(`Connected to server and joined session ${sessionId}`)
+                toast.success(`Connected to server and joined session ${sessionId}!`)
             }
             client!.onclose = () => {
                 toast("Disconnected from the server.");
@@ -165,7 +138,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             setPreviousSongs([])
             setCurrentSong("")
             setCurrentSongUrl("")
-            setTimeStamp(0)
+            setTimestamp(0)
+            setMaxTimestamp(0)
         }
 
     }, [client, joined])
@@ -174,7 +148,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     // login user to WS server after connection
     const logInUser = () => {
         const username = data!.user!.name!;
-        if (username.trim()) {
+        if (username.trim() && sessionId) {
             const sdata = {
                 username: username, sessionId: sessionId
             };
@@ -183,7 +157,6 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                 type: typeDefinition.LOGIN
             }));
         }
-        setWsLogin(true)
     }
 
 
@@ -198,29 +171,27 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                 if (dat.sessionId != sessionId) return;
 
                 switch (dat.type) {
-                    case typeDefinition.PLAY:
-                        if (dat.userId != sessionUserId) {
-                        }
-                        break
-                    case typeDefinition.PAUSE:
-                        if (dat.userId != sessionUserId) {
-                        }
-                        break
-                    case typeDefinition.SONG_UPDATE:
-                        if (dat.userId != sessionUserId) {
-                        }
-                        break
                     case typeDefinition.MESSAGE:
                         toast(`${dat.data.message}`, { icon: '✉️' })
                         break
                     case typeDefinition.LOGIN:
                         setSessionUserId(dat.data.userId)
+                        setCurrentSongUrl(dat.data.sessionData.currentSongUrl)
+                        setTimestamp(dat.data.sessionData.songTimestamp)
+                        setMaxTimestamp(dat.data.sessionData.songMaxTimestamp)
+                        setPlayerStatus(dat.data.sessionData.songState)
+                        setWsLogin(true)
                         break
                     default:
+                        setCurrentSongUrl(dat.data.sessionData.currentSongUrl)
+                        rap.audioEl.current.currentTime = dat.data.sessionData.songTimestamp;
+                        setTimestamp(rap.audioEl.current.currentTime)
+                        setMaxTimestamp(dat.data.sessionData.songMaxTimestamp)
+                        setPlayerStatus(dat.data.sessionData.songState)
                         break
                 }
 
-
+                setActiveUsers(Object.keys(dat.data.sessionData.connectedUsers).length)
 
             }
         }
@@ -229,17 +200,19 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
 
     // update display of song name
     useEffect(() => {
-    }, [])
+        if (wsLogin) {
+            setCurrentSong(rap.audioEl.current.title.split("/music/")[1])
+        }
+    }, [currentSongUrl])
 
-    // update display of timestamp and max timestamp
     useEffect(() => {
-    }, [])
-
-
-
-    // check for song end -> if ends play a new song
-    useEffect(() => {
-    }, [])
+        if (!wsReady || sliderInteraction) return
+        if (playerStatus == "paused") {
+            rap.audioEl.current.pause()
+        } else if (playerStatus == "playing") {
+            rap.audioEl.current.play()
+        }
+    }, [playerStatus, wsLogin, sliderInteraction])
 
 
     return (
@@ -262,44 +235,68 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                 :
                 <>
                     {joined ? <>
-                        {wsReady ? <>
+                        <ReactAudioPlayer
+                            ref={(element) => { rap = element; }}
+                            src={currentSongUrl}
+                            autoPlay
+                            listenInterval={10}
+                            onListen={(e) => {
+                                if (wsLogin && !sliderInteraction) {
+                                    setTimestamp(e)
+                                }
+                            }}
+                            onPause={(e) => {
+                                if (wsLogin && !sliderInteraction) {
+                                    client?.send(JSON.stringify({ type: typeDefinition.PAUSE }))
+                                }
+                            }}
+                            onPlay={(e) => {
+                                if (wsLogin && !sliderInteraction) {
+                                    client?.send(JSON.stringify({ type: typeDefinition.PLAY }))
+                                    setMaxTimestamp(rap.audioEl.current.duration)
+                                }
+                            }}
+                            preload={"auto"}
+                            controls
+                            style={{ "display": "none" }}
+                        />
+                        {wsReady && wsLogin ? <>
                             <div className='absolute-wrap'>
                                 <div className="text-center my-4 container">
-                                    <p>{currentSong}</p>
-                                    {audioPlayer}
-                                    <h1>{secondsToString(Math.floor(timestamp))} / {secondsToString(Math.floor(maxTimestamp))}</h1>
+                                    <p>{playerStatus == "idle" ? "Select a song!" : currentSong}</p>
+                                    <h1>{sliderInteraction ? secondsToString(Math.floor(sliderValue)) : secondsToString(Math.floor(timestamp))} / {secondsToString(Math.floor(maxTimestamp))}</h1>
 
                                     <Slider
                                         max={maxTimestamp}
                                         min={0}
                                         defaultValue={0}
-                                        value={Math.floor(timestamp)}
+                                        value={sliderInteraction ? sliderValue : Math.floor(timestamp)}
                                         ariaLabelForHandle={`${timestamp}`}
                                         ariaValueTextFormatterForHandle={(value) => { return secondsToString(Math.floor(value)) }}
                                         ariaLabelledByForHandle={`${timestamp}`}
                                         included={true}
-                                        onBeforeChange={() => { /* before onChange */ }}
-                                        onAfterChange={() => { /* after onChange */ }}
-                                        onChange={(value) => { /* slider change */ }}
+                                        onBeforeChange={() => { setSliderInteraction(true); }}
+                                        onAfterChange={() => { client?.send(JSON.stringify({ type: typeDefinition.TIME_UPDATE, timestamp: sliderValue })); setSliderInteraction(false); }}
+                                        onChange={(value) => { setSliderValue(value as number); }}
                                         style={{ "width": "80%", "margin": "0 auto" }}
                                     />
 
                                     <div className="m-2">
                                         {previousSongs.length > 1 ?
-                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={previousSong}></FontAwesomeIcon> : null}
+                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={() => { }}></FontAwesomeIcon> : null}
                                         {(playerStatus == "idle" || playerStatus == "paused") ?
-                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={play}></FontAwesomeIcon>
+                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={() => { rap.audioEl.current.play() }}></FontAwesomeIcon>
                                             :
-                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={pause}></FontAwesomeIcon>
+                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={() => { rap.audioEl.current.pause() }}></FontAwesomeIcon>
                                         }
-                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={nextSong}></FontAwesomeIcon>
+                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={() => { const file = songList[Math.floor(Math.random() * songList.length)]; client?.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })); }}></FontAwesomeIcon>
                                     </div>
 
                                 </div>
                             </div>
                             <div className="text-center login-container">
                                 <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
-                                <p>Session ID: {sessionId} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`); setSessionId(""); }} size="sm">Leave</Button></p>
+                                <p>Session ID: {sessionId} <FontAwesomeIcon icon={faUser} className='mx-1'></FontAwesomeIcon>{activeUsers} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`); setSessionId(""); }} size="sm">Leave</Button></p>
                             </div>
                             <div className="text-center songlist">
                                 <Table striped bordered hover>
@@ -310,7 +307,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <SongList list={songList} setter={setCurrentSongUrl} currentSong={currentSongUrl} timestampSetter={setTimeStamp} prevSetter={setPreviousSongs} prev={previousSongs} />
+                                        <SongList list={songList} client={client} />
                                     </tbody>
                                 </Table>
                             </div>
@@ -318,7 +315,12 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             <div className="absolute-center">
                                 <div className="text-center">
                                     <div className="loader">Loading...</div>
-                                    <p>Joining session {sessionId}...</p>
+                                    {!wsReady && !wsLogin ?
+                                        <p>Joining session {sessionId}...</p>
+                                        :
+                                        <p>Logging in...</p>
+                                    }
+
                                 </div>
                             </div>
                         </>}
@@ -390,15 +392,15 @@ function secondsToString(seconds: number) {
 }
 
 
-function SongList({ list, setter, currentSong, timestampSetter, prevSetter, prev }: any) {
-    return list ? list.map((l: any) => <Song file={l} setter={setter} currentSong={currentSong} timestampSetter={timestampSetter} prevSetter={prevSetter} prev={prev} key={l}></Song>) : null;
+function SongList({ list, client }: any) {
+    return list ? list.map((l: any) => <Song file={l} client={client} key={l}></Song>) : null;
 
 }
 
 
-function Song({ file, setter, currentSong, timestampSetter, prevSetter, prev }: any) {
+function Song({ file, client }: any) {
     return <>
-        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => {  /* play song */ }}></FontAwesomeIcon></td></tr>
+        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => { client.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })) }}></FontAwesomeIcon></td></tr>
     </>
 }
 
