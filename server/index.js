@@ -56,7 +56,6 @@ sessionData = {
 const updateSessions = () => {
 
     Object.keys(sessionData).forEach((key) => {
-        //console.log(sessionData[key])
         if (sessionData[key].songState == "playing") {
             sessionData[key].songTimestamp++;
         } else if (sessionData[key].songState == "paused") {
@@ -82,7 +81,7 @@ const sendMessage = (json) => {
     Object.keys(clients).map((client) => {
         clients[client].sendUTF(json);
     });
-    console.log("Sent:", json)
+    console.log("Sent:", JSON.parse(json))
 }
 
 setInterval(updateSessions, 1000)
@@ -90,14 +89,13 @@ setInterval(updateSessions, 1000)
 
 wsServer.on('request', function (request) {
     var userID = getUniqueID();
-    console.log((new Date()) + ' Recieved a new connection from origin ' + request.origin + '.');
+    console.log(`Recieved: New connection request from`, request.remoteAddress);
     const connection = request.accept(null, request.origin);
     clients[userID] = connection;
-    console.log('connected: ' + userID + ' in ' + Object.getOwnPropertyNames(clients));
+    console.log('Connected: Assigned ID: ' + userID);
     connection.on('message', function (message) {
         if (message.type === 'utf8') {
             const dataFromClient = JSON.parse(message.utf8Data);
-            console.log("Session Data:", sessionData)
             console.log("Received:", dataFromClient)
             switch (dataFromClient.type) {
                 case typeDefinition.LOGIN:
@@ -120,29 +118,32 @@ wsServer.on('request', function (request) {
                             connectedUsers: {}
                         }
                         sessionData[users[userID].sessionId].connectedUsers[users[userID].id] = users[userID]
-                        console.log("Session Data:", sessionData)
                     }
 
-                    console.log(`Session ${users[userID].sessionId} connected users:`, sessionData[users[userID].sessionId].connectedUsers)
                     clients[userID].sendUTF(JSON.stringify({ type: typeDefinition.LOGIN, userId: users[userID].id, sessionId: users[userID].sessionId, data: { userId: userID, sessionData: sessionData[users[userID].sessionId] } }))
                     sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: users[userID].sessionId, data: { message: `${users[userID].username} joined the session!`, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PLAY:
+                    if(sessionData[users[userID].sessionId].songState == "playing") break;
                     sessionData[users[userID].sessionId].songState = "playing"
                     sendMessage(JSON.stringify({ type: typeDefinition.PLAY, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PAUSE:
+                    if(sessionData[users[userID].sessionId].songState == "paused") break;
                     sessionData[users[userID].sessionId].songState = "paused"
                     sendMessage(JSON.stringify({ type: typeDefinition.PAUSE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.SONG_UPDATE:
                     getAudioDurationInSeconds(LOCAL_MUSIC + "/" + dataFromClient.fileName).then((duration) => {
-                        console.log(duration)
-                        sessionData[users[userID].sessionId].songState = "playing"
+                        sessionData[users[userID].sessionId].songState = "paused"
                         sessionData[users[userID].sessionId].songTimestamp = 0
                         sessionData[users[userID].sessionId].songMaxTimestamp = duration
                         sessionData[users[userID].sessionId].currentSongUrl = dataFromClient.songUrl
                         sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { songUrl: dataFromClient.songUrl, by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
+                        setTimeout(() => {
+                            sessionData[users[userID].sessionId].songState = "playing"
+                            sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { songUrl: dataFromClient.songUrl, by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
+                        }, 1000)
                     })
                     break
                 case typeDefinition.TIME_UPDATE:
@@ -158,7 +159,7 @@ wsServer.on('request', function (request) {
         }
     });
     connection.on('close', function (connection) {
-        console.log((new Date()) + " Peer " + userID + " disconnected.");
+        console.log(`${users[userID].username} disconnected (Session: ${users[userID].sessionId}, UserID: ${userID})`);
 
         let tmp = users[userID].username
         let tmp2 = sessionData[users[userID].sessionId]
@@ -173,6 +174,5 @@ wsServer.on('request', function (request) {
         delete users[userID];
 
         sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: tmp3, data: { message: `${tmp} left the session!`, sessionData: tmp2 } }))
-        console.log("Session Data:", sessionData)
     });
 });

@@ -15,8 +15,8 @@ import { useRouter } from 'next/router';
 
 let rap: any = {}
 let remoteMusicLoc = "http://localhost"
-//const wsHost = 'wss://skippies.fun/music/ws'
-const wsHost = "ws://localhost:8081"
+const wsHost = 'wss://skippies.fun/music/ws'
+//const wsHost = "ws://localhost:8081"
 
 
 
@@ -63,6 +63,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const [activeUsers, setActiveUsers] = useState(0)
     const [sliderInteraction, setSliderInteraction] = useState(false)
     const [sliderValue, setSliderValue] = useState(0)
+    const [showError, setShowError] = useState(false)
+    const [wsBusy, setWsBusy] = useState(false)
 
 
 
@@ -113,23 +115,22 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             client!.onopen = () => {
                 console.log(`Connected to ${wsHost}!`)
                 setWsReady(true)
-                toast.success(`Connected to server and joined session ${sessionId}!`)
-            }
-            client!.onclose = () => {
-                toast("Disconnected from the server.");
-                setJoined(false);
-                setWsReady(false);
-                setWsLogin(false);
-                setClient(undefined);
-                setSessionId("");
-
+                toast.success(`Connected to server and joined session ${sessionId}!`, { duration: 1000 })
             }
             client!.onerror = () => {
-                toast.error("Lost connection to the server. :(");
+                toast.error("Lost connection to the server. :(", { duration: 1000 });
                 setJoined(false);
                 setWsReady(false);
                 setWsLogin(false);
                 setClient(undefined);
+                setShowError(true)
+            }
+            client!.onclose = () => {
+                setJoined(false);
+                setWsReady(false);
+                setWsLogin(false);
+                setClient(undefined);
+
             }
         }
 
@@ -165,6 +166,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         if (status === "authenticated" && wsReady) {
             logInUser();
             client!.onmessage = (message: any) => {
+                setWsBusy(true)
                 const dat = JSON.parse(message.data as string)
                 console.log(dat)
 
@@ -172,27 +174,30 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
 
                 switch (dat.type) {
                     case typeDefinition.MESSAGE:
-                        toast(`${dat.data.message}`, { icon: '✉️' })
-                        break
+                        toast(`${dat.data.message}`, { icon: '✉️', duration: 1000 })
+                        break;
                     case typeDefinition.LOGIN:
                         setSessionUserId(dat.data.userId)
                         setCurrentSongUrl(dat.data.sessionData.currentSongUrl)
-                        setTimestamp(dat.data.sessionData.songTimestamp)
+                        rap.audioEl.current.currentTime = dat.data.sessionData.songTimestamp;
+                        setTimestamp(rap.audioEl.current.currentTime)
                         setMaxTimestamp(dat.data.sessionData.songMaxTimestamp)
                         setPlayerStatus(dat.data.sessionData.songState)
                         setWsLogin(true)
-                        break
+                        break;
                     default:
                         setCurrentSongUrl(dat.data.sessionData.currentSongUrl)
                         rap.audioEl.current.currentTime = dat.data.sessionData.songTimestamp;
                         setTimestamp(rap.audioEl.current.currentTime)
                         setMaxTimestamp(dat.data.sessionData.songMaxTimestamp)
                         setPlayerStatus(dat.data.sessionData.songState)
-                        break
+                        break;
                 }
 
                 setActiveUsers(Object.keys(dat.data.sessionData.connectedUsers).length)
-
+                setTimeout(() => {
+                    setWsBusy(false)
+                }, 100)
             }
         }
     }, [status, wsReady])
@@ -243,17 +248,19 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             onListen={(e) => {
                                 if (wsLogin && !sliderInteraction) {
                                     setTimestamp(e)
+                                    if (maxTimestamp != rap.audioEl.current.duration) {
+                                        setMaxTimestamp(rap.audioEl.current.duration)
+                                    }
                                 }
                             }}
                             onPause={(e) => {
-                                if (wsLogin && !sliderInteraction) {
+                                if (wsLogin && !sliderInteraction && !wsBusy) {
                                     client?.send(JSON.stringify({ type: typeDefinition.PAUSE }))
                                 }
                             }}
                             onPlay={(e) => {
-                                if (wsLogin && !sliderInteraction) {
+                                if (wsLogin && !sliderInteraction && !wsBusy) {
                                     client?.send(JSON.stringify({ type: typeDefinition.PLAY }))
-                                    setMaxTimestamp(rap.audioEl.current.duration)
                                 }
                             }}
                             preload={"auto"}
@@ -283,20 +290,20 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
 
                                     <div className="m-2">
                                         {previousSongs.length > 1 ?
-                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={() => { }}></FontAwesomeIcon> : null}
+                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { } }}></FontAwesomeIcon> : null}
                                         {(playerStatus == "idle" || playerStatus == "paused") ?
-                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={() => { rap.audioEl.current.play() }}></FontAwesomeIcon>
+                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.play() }}></FontAwesomeIcon>
                                             :
-                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={() => { rap.audioEl.current.pause() }}></FontAwesomeIcon>
+                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.pause() }}></FontAwesomeIcon>
                                         }
-                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={() => { const file = songList[Math.floor(Math.random() * songList.length)]; client?.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })); }}></FontAwesomeIcon>
+                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { const file = songList[Math.floor(Math.random() * songList.length)]; client?.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })); } }}></FontAwesomeIcon>
                                     </div>
 
                                 </div>
                             </div>
                             <div className="text-center login-container">
                                 <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
-                                <p>Session ID: {sessionId} <FontAwesomeIcon icon={faUser} className='mx-1'></FontAwesomeIcon>{activeUsers} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`); setSessionId(""); }} size="sm">Leave</Button></p>
+                                <p>Session ID: {sessionId} <FontAwesomeIcon icon={faUser} className='mx-1'></FontAwesomeIcon>{activeUsers} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`, { duration: 1000 }); setSessionId(""); }} size="sm">Leave</Button></p>
                             </div>
                             <div className="text-center songlist">
                                 <Table striped bordered hover>
@@ -330,6 +337,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             show={modalShow}
                             onHide={() => setModalShow(false)}
                             backdrop="static"
+                            centered
                         >
                             <Modal.Header>
                                 <Modal.Title>
@@ -345,6 +353,23 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             </Modal.Footer>
 
                         </Modal>
+                        <Modal
+                            size="sm"
+                            show={showError}
+                            onHide={() => setShowError(false)}
+                            backdrop="static"
+                            centered
+                        >
+                            <Modal.Header>
+                                <Modal.Title>
+                                    Connection lost.
+                                </Modal.Title>
+                            </Modal.Header>
+                            <Modal.Footer>
+                                <Button onClick={() => { setShowError(false); setJoined(true) }}>Reconnect</Button>
+                                <Button onClick={() => { setSessionId(""); setShowError(false); }}>Cancel</Button>
+                            </Modal.Footer>
+                        </Modal>
                         <div className="text-center my-5 container">
                             <h1>Welcome back {data?.user?.name}!</h1>
                             <div className='text-center my-3'>
@@ -352,7 +377,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             </div>
                             <div className="text-center my-3">
                                 <Form.Control type="text" placeholder="Session ID" className="my-2" value={sessionId} onChange={(e) => { setSessionId(e.target.value); }} />
-                                <Button onClick={() => { if (!sessionId.length) { toast.error("Session ID cannot be empty!"); return } setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join Session</Button>
+                                <Button onClick={() => { if (!sessionId.length) { toast.error("Session ID cannot be empty!", { duration: 1000 }); return } setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join Session</Button>
                             </div>
                             <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
                         </div>
