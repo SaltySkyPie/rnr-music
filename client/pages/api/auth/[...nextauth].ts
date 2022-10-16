@@ -29,10 +29,6 @@ export const authOptions = {
                     response_type: "code"
                 }
             }
-        }),
-        InstagramProvider({
-            clientId: process.env.IG_CLIENT_ID as string,
-            clientSecret: process.env.IG_SECRET as string
         })
     ],
 } as NextAuthOptions;

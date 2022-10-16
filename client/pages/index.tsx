@@ -232,7 +232,6 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         <h2>Login with:</h2>
                         <div className="my-3">
                             <FontAwesomeIcon icon={faFacebook} size="3x" className="m-3" onClick={() => { signIn("facebook") }}></FontAwesomeIcon>
-                            <FontAwesomeIcon icon={faInstagram} size="3x" className="m-3" onClick={() => { signIn("instagram") }}></FontAwesomeIcon>
                             <FontAwesomeIcon icon={faGoogle} size="3x" className="m-3" onClick={() => { signIn("google") }}></FontAwesomeIcon>
                         </div>
                     </div>
