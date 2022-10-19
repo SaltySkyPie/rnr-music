@@ -109,3 +109,8 @@ main {
   left: 50%;
   transform: translate(-50%, -50%)
 }  
+
+.anchor {
+  position: absolute;
+  transform: translateY(-21vh);
+}

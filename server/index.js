@@ -1,5 +1,5 @@
 require('dotenv').config()
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const webSocketsServerPort = process.env.PORT;
 const webSocketServer = require('websocket').server;
 const http = require('http');
@@ -35,7 +35,16 @@ let sessionData = {};
 let songList = []
 
 async function updateSongList() {
-    songList = await (await fetch(process.env.SONG_LIST)).json()
+    console.log("Updating song listing...")
+    const categories = await (await fetch(process.env.SONG_LIST)).json()
+    const final = []
+    for (const category of categories) {
+        for (const file of category.files) {
+            final.push({ song: process.env.REMOTE_MUSIC + "/" + category.name + "/" + file, category: category.name, file: file })
+        }
+    }
+    songList = final
+    console.log("Song listing updated.")
 }
 updateSongList()
 setInterval(updateSongList, 60000)
@@ -61,10 +70,10 @@ const updateSessions = () => {
         } else if (sessionData[key].songState == "paused") {
             if (sessionData[key].songTimestamp >= sessionData[key].songMaxTimestamp - 1) {
                 const s = songList[Math.floor(Math.random() * songList.length)]
-                sessionData[key].currentSongUrl = REMOTE_MUSIC + "/" + s
+                sessionData[key].currentSongUrl = REMOTE_MUSIC + "/" + s.category + "/" + s.file
                 sessionData[key].songState = "playing"
                 sessionData[key].songTimestamp = 0
-                getAudioDurationInSeconds(LOCAL_MUSIC + "/" + s).then((duration) => {
+                getAudioDurationInSeconds(LOCAL_MUSIC + "/" + s.category + "/" + s.file).then((duration) => {
                     sessionData[key].songMaxTimestamp = duration
                     sendMessage(JSON.stringify({ type: typeDefinition.SONG_UPDATE, sessionId: key, data: { songUrl: sessionData[key].currentSongUrl, by: "server", sessionData: sessionData[key] } }))
                 })
@@ -124,17 +133,17 @@ wsServer.on('request', function (request) {
                     sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: users[userID].sessionId, data: { message: `${users[userID].username} joined the session!`, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PLAY:
-                    if(sessionData[users[userID].sessionId].songState == "playing") break;
+                    if (sessionData[users[userID].sessionId].songState == "playing") break;
                     sessionData[users[userID].sessionId].songState = "playing"
                     sendMessage(JSON.stringify({ type: typeDefinition.PLAY, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.PAUSE:
-                    if(sessionData[users[userID].sessionId].songState == "paused") break;
+                    if (sessionData[users[userID].sessionId].songState == "paused") break;
                     sessionData[users[userID].sessionId].songState = "paused"
                     sendMessage(JSON.stringify({ type: typeDefinition.PAUSE, userId: users[userID].id, sessionId: users[userID].sessionId, data: { by: users[userID].username, sessionData: sessionData[users[userID].sessionId] } }))
                     break
                 case typeDefinition.SONG_UPDATE:
-                    getAudioDurationInSeconds(LOCAL_MUSIC + "/" + dataFromClient.fileName).then((duration) => {
+                    getAudioDurationInSeconds(LOCAL_MUSIC + "/" + dataFromClient.category + "/" + dataFromClient.fileName).then((duration) => {
                         sessionData[users[userID].sessionId].songState = "paused"
                         sessionData[users[userID].sessionId].songTimestamp = 0
                         sessionData[users[userID].sessionId].songMaxTimestamp = duration
@@ -159,6 +168,7 @@ wsServer.on('request', function (request) {
         }
     });
     connection.on('close', function (connection) {
+        if(userID in users) {
         console.log(`${users[userID].username} disconnected (Session: ${users[userID].sessionId}, UserID: ${userID})`);
 
         let tmp = users[userID].username
@@ -174,5 +184,8 @@ wsServer.on('request', function (request) {
         delete users[userID];
 
         sendMessage(JSON.stringify({ type: typeDefinition.MESSAGE, sessionId: tmp3, data: { message: `${tmp} left the session!`, sessionData: tmp2 } }))
+    } else {
+        delete clients[userID];
+    }
     });
 });

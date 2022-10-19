@@ -2,9 +2,9 @@ import type { NextPage } from 'next'
 import Image from 'react-bootstrap/Image'
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFacebook, faGoogle, faInstagram } from "@fortawesome/free-brands-svg-icons";
-import { faPlay, faPause, faForwardFast, faBackwardFast, faUser } from "@fortawesome/free-solid-svg-icons"
+import { faPlay, faPause, faForwardFast, faBackwardFast, faUser, faArrowUp } from "@fortawesome/free-solid-svg-icons"
 import { useSession, signIn, signOut } from "next-auth/react"
-import { Button, Form, Modal } from 'react-bootstrap';
+import { Button, Container, Form, Modal, Nav, Navbar } from 'react-bootstrap';
 import { useEffect, useRef, useState } from 'react';
 import ReactAudioPlayer from 'react-audio-player';
 import Slider from "rc-slider"
@@ -13,8 +13,9 @@ import { w3cwebsocket as W3CWebSocket } from "websocket";
 import toast from 'react-hot-toast'
 import { useRouter } from 'next/router';
 
+
 let rap: any = {}
-let remoteMusicLoc = "http://localhost"
+let remoteMusicLoc = "file:///home/saltyskypie/Music/"
 const wsHost = 'wss://skippies.fun/music/ws'
 //const wsHost = "ws://localhost:8081"
 
@@ -65,6 +66,31 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const [sliderValue, setSliderValue] = useState(0)
     const [showError, setShowError] = useState(false)
     const [wsBusy, setWsBusy] = useState(false)
+    const [songsLoaded, setSongsLoaded] = useState(false)
+    const [categories, setCategories] = useState<string[]>([])
+    const [visible, setVisible] = useState(false)
+
+    const toggleVisible = () => {
+        const scrolled = document.documentElement.scrollTop;
+        if (scrolled > 300) {
+            setVisible(true)
+        }
+        else if (scrolled <= 300) {
+            setVisible(false)
+        }
+    };
+
+    const scrollToTop = () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    };
+
+    if (typeof window !== "undefined") {
+
+        window.addEventListener('scroll', toggleVisible);
+    }
 
 
 
@@ -94,6 +120,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     const renderSongs = async () => {
         const l = await (await fetch('/api/getSongs')).json()
         setSongList(l)
+        let c: string[] = []
+        for (const category of l) {
+            c = [...c, category.name]
+        }
+        setCategories(c)
+        console.log(l)
+        console.log(c)
+        setSongsLoaded(true)
     }
 
     // render songs on load
@@ -206,7 +240,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     // update display of song name
     useEffect(() => {
         if (wsLogin) {
-            setCurrentSong(rap.audioEl.current.title.split("/music/")[1])
+            const title = ((currentSongUrl.split("/music/")[1]).replace(/\.[^/.]+$/, "")).replace("/", " | ")
+            rap.audioEl.current.title = title
+            setCurrentSong(title)
         }
     }, [currentSongUrl])
 
@@ -222,180 +258,183 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
 
     return (
         <main className='container'>
-            {!data?.user && status !== "authenticated" ?
-                <>
-                    <div className='text-center my-5'>
-                        <Image src='/logo.png'></Image>
-                        <h1>TŠ TWIST MUSIC SYSTEM</h1>
-                    </div>
-                    <div className='text-center'>
-                        <h2>Login with:</h2>
-                        <div className="my-3">
-                            <FontAwesomeIcon icon={faFacebook} size="3x" className="m-3" onClick={() => { signIn("facebook") }}></FontAwesomeIcon>
-                            <FontAwesomeIcon icon={faGoogle} size="3x" className="m-3" onClick={() => { signIn("google") }}></FontAwesomeIcon>
+            {status !== "loading" ? <>
+                {!data?.user && status !== "authenticated" ?
+                    <>
+                        <div className='text-center my-5'>
+                            <Image src='/logo.png'></Image>
+                            <h1>TŠ TWIST MUSIC SYSTEM</h1>
                         </div>
-                    </div>
-                </>
-                :
-                <>
-                    {joined ? <>
-                        <ReactAudioPlayer
-                            ref={(element) => { rap = element; }}
-                            src={currentSongUrl}
-                            autoPlay
-                            listenInterval={10}
-                            onListen={(e) => {
-                                if (wsLogin && !sliderInteraction) {
-                                    setTimestamp(e)
-                                    if (maxTimestamp != rap.audioEl.current.duration) {
-                                        setMaxTimestamp(rap.audioEl.current.duration)
-                                    }
-                                }
-                            }}
-                            onPause={(e) => {
-                                if (wsLogin && !sliderInteraction && !wsBusy) {
-                                    client?.send(JSON.stringify({ type: typeDefinition.PAUSE }))
-                                }
-                            }}
-                            onPlay={(e) => {
-                                if (wsLogin && !sliderInteraction && !wsBusy) {
-                                    client?.send(JSON.stringify({ type: typeDefinition.PLAY }))
-                                }
-                            }}
-                            preload={"auto"}
-                            controls
-                            style={{ "display": "none" }}
-                        />
-                        {wsReady && wsLogin ? <>
-                            <div className='absolute-wrap'>
-                                <div className="text-center my-4 container">
-                                    <p>{playerStatus == "idle" ? "Select a song!" : currentSong}</p>
-                                    <h1>{sliderInteraction ? secondsToString(Math.floor(sliderValue)) : secondsToString(Math.floor(timestamp))} / {secondsToString(Math.floor(maxTimestamp))}</h1>
-
-                                    <Slider
-                                        max={maxTimestamp}
-                                        min={0}
-                                        defaultValue={0}
-                                        value={sliderInteraction ? sliderValue : Math.floor(timestamp)}
-                                        ariaLabelForHandle={`${timestamp}`}
-                                        ariaValueTextFormatterForHandle={(value) => { return secondsToString(Math.floor(value)) }}
-                                        ariaLabelledByForHandle={`${timestamp}`}
-                                        included={true}
-                                        onBeforeChange={() => { setSliderInteraction(true); }}
-                                        onAfterChange={() => { client?.send(JSON.stringify({ type: typeDefinition.TIME_UPDATE, timestamp: sliderValue })); setSliderInteraction(false); }}
-                                        onChange={(value) => { setSliderValue(value as number); }}
-                                        style={{ "width": "80%", "margin": "0 auto" }}
-                                    />
-
-                                    <div className="m-2">
-                                        {previousSongs.length > 1 ?
-                                            <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { } }}></FontAwesomeIcon> : null}
-                                        {(playerStatus == "idle" || playerStatus == "paused") ?
-                                            <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.play() }}></FontAwesomeIcon>
-                                            :
-                                            <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.pause() }}></FontAwesomeIcon>
+                        <div className='text-center'>
+                            <h2>Login with:</h2>
+                            <div className="my-3">
+                                <FontAwesomeIcon icon={faFacebook} size="3x" className="m-3" onClick={() => { signIn("facebook") }}></FontAwesomeIcon>
+                                <FontAwesomeIcon icon={faGoogle} size="3x" className="m-3" onClick={() => { signIn("google") }}></FontAwesomeIcon>
+                            </div>
+                        </div>
+                    </>
+                    :
+                    <>
+                        {joined ? <>
+                            <ReactAudioPlayer
+                                ref={(element) => { rap = element; }}
+                                src={currentSongUrl}
+                                autoPlay
+                                listenInterval={10}
+                                onListen={(e) => {
+                                    if (wsLogin && !sliderInteraction) {
+                                        setTimestamp(e)
+                                        if (maxTimestamp != rap.audioEl.current.duration) {
+                                            setMaxTimestamp(rap.audioEl.current.duration)
                                         }
-                                        <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { const file = songList[Math.floor(Math.random() * songList.length)]; client?.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })); } }}></FontAwesomeIcon>
-                                    </div>
-
-                                </div>
-                            </div>
-                            <div className="text-center login-container">
-                                <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
-                                <p>Session ID: {sessionId} <FontAwesomeIcon icon={faUser} className='mx-1'></FontAwesomeIcon>{activeUsers} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`, { duration: 1000 }); setSessionId(""); }} size="sm">Leave</Button></p>
-                            </div>
-                            <div className="text-center songlist">
-                                <Table striped bordered hover>
-                                    <thead>
-                                        <tr>
-                                            <th>Song</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <SongList list={songList} client={client} />
-                                    </tbody>
-                                </Table>
-                            </div>
-                        </> : <>
-                            <div className="absolute-center">
-                                <div className="text-center">
-                                    <div className="loader">Loading...</div>
-                                    {!wsReady && !wsLogin ?
-                                        <p>Joining session {sessionId}...</p>
-                                        :
-                                        <p>Logging in...</p>
                                     }
+                                }}
+                                onPause={(e) => {
+                                    if (wsLogin && !sliderInteraction && !wsBusy) {
+                                        client?.send(JSON.stringify({ type: typeDefinition.PAUSE }))
+                                    }
+                                }}
+                                onPlay={(e) => {
+                                    if (wsLogin && !sliderInteraction && !wsBusy) {
+                                        client?.send(JSON.stringify({ type: typeDefinition.PLAY }))
+                                    }
+                                }}
+                                preload={"auto"}
+                                controls
+                                style={{ "display": "none" }}
+                            />
+                            {wsReady && wsLogin && songsLoaded ? <>
+                                <div className='absolute-wrap'>
+                                    <div className="text-center my-4 container">
+                                        <p>{playerStatus == "idle" ? "Select a song!" : currentSong}</p>
+                                        <h1>{sliderInteraction ? secondsToString(Math.floor(sliderValue)) : secondsToString(Math.floor(timestamp))} / {secondsToString(Math.floor(maxTimestamp))}</h1>
 
+                                        <Slider
+                                            max={maxTimestamp}
+                                            min={0}
+                                            defaultValue={0}
+                                            value={sliderInteraction ? sliderValue : Math.floor(timestamp)}
+                                            ariaLabelForHandle={`${timestamp}`}
+                                            ariaValueTextFormatterForHandle={(value) => { return secondsToString(Math.floor(value)) }}
+                                            ariaLabelledByForHandle={`${timestamp}`}
+                                            included={true}
+                                            onBeforeChange={() => { setSliderInteraction(true); }}
+                                            onAfterChange={() => { client?.send(JSON.stringify({ type: typeDefinition.TIME_UPDATE, timestamp: sliderValue })); setSliderInteraction(false); }}
+                                            onChange={(value) => { setSliderValue(value as number); }}
+                                            style={{ "width": "80%", "margin": "0 auto" }}
+                                        />
+
+                                        <div className="m-2">
+                                            {previousSongs.length > 1 ?
+                                                <FontAwesomeIcon icon={faBackwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { } }}></FontAwesomeIcon> : null}
+                                            {(playerStatus == "idle" || playerStatus == "paused") ?
+                                                <FontAwesomeIcon icon={faPlay} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.play() }}></FontAwesomeIcon>
+                                                :
+                                                <FontAwesomeIcon icon={faPause} size="2x" className='mx-3' onClick={() => { if (!wsBusy) rap.audioEl.current.pause() }}></FontAwesomeIcon>
+                                            }
+                                            <FontAwesomeIcon icon={faForwardFast} size="2x" className='mx-3' onClick={() => { if (!wsBusy) { client?.send(JSON.stringify({ type: typeDefinition.TIME_UPDATE, timestamp: maxTimestamp + 1 })); client?.send(JSON.stringify({ type: typeDefinition.PAUSE })) } }}></FontAwesomeIcon>
+                                        </div>
+
+                                    </div>
                                 </div>
+                                <div className="text-center login-container">
+                                    <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
+                                    <p>Session ID: {sessionId} <FontAwesomeIcon icon={faUser} className='mx-1'></FontAwesomeIcon>{activeUsers} <Button onClick={() => { setJoined(false); setWsReady(false); setWsLogin(false); client?.close(); setClient(undefined); toast.success(`Left session ${sessionId}`, { duration: 1000 }); setSessionId(""); }} size="sm">Leave</Button></p>
+                                </div>
+                                <Navbar expand='lg' style={{ "position": "static" }}>
+                                    <Container>
+                                        <Navbar.Brand>Categories</Navbar.Brand>
+                                        <Navbar.Toggle />
+                                        <Navbar.Collapse className="justify-content-end">
+                                            <Nav className="mw-auto">
+                                                <CategoryButtons categories={categories} />
+                                            </Nav>
+                                        </Navbar.Collapse>
+                                    </Container>
+                                </Navbar>
+                                <Button onClick={scrollToTop} style={{ display: visible ? 'inline' : 'none', position: "fixed", bottom: "10px", right: "10px" }} ><FontAwesomeIcon icon={faArrowUp}></FontAwesomeIcon></Button>
+                                <div className="text-center songlist">
+                                    <CategoryList list={songList} client={client}></CategoryList>
+                                </div>
+                            </> : <>
+                                <div className="absolute-center">
+                                    <div className="text-center">
+                                        <div className="loader">Loading...</div>
+                                        {!wsReady && !wsLogin ?
+                                            <p>Joining session {sessionId}...</p>
+                                            :
+                                            <p>Logging in...</p>
+                                        }
+                                        {!songsLoaded ? <p>Updating song listing...</p> : null}
+
+                                    </div>
+                                </div>
+                            </>}
+                        </> : <>
+                            <Modal
+                                size="lg"
+                                show={modalShow}
+                                onHide={() => setModalShow(false)}
+                                backdrop="static"
+                                centered
+                            >
+                                <Modal.Header>
+                                    <Modal.Title>
+                                        Join session {sessionId}?
+                                    </Modal.Title>
+                                </Modal.Header>
+                                <Modal.Body>
+                                    <p>You were invited to join session {sessionId}. Do you wanna join?</p>
+                                </Modal.Body>
+                                <Modal.Footer>
+                                    <Button onClick={() => { setModalShow(false); setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join</Button>
+                                    <Button onClick={() => { setModalShow(false); }}>Start different session</Button>
+                                </Modal.Footer>
+
+                            </Modal>
+                            <Modal
+                                size="sm"
+                                show={showError}
+                                onHide={() => setShowError(false)}
+                                backdrop="static"
+                                centered
+                            >
+                                <Modal.Header>
+                                    <Modal.Title>
+                                        Connection lost.
+                                    </Modal.Title>
+                                </Modal.Header>
+                                <Modal.Footer>
+                                    <Button onClick={() => { setShowError(false); setJoined(true) }}>Reconnect</Button>
+                                    <Button onClick={() => { setSessionId(""); setShowError(false); }}>Cancel</Button>
+                                </Modal.Footer>
+                            </Modal>
+                            <div className="text-center my-5 container">
+                                <h1>Welcome back {data?.user?.name}!</h1>
+                                <div className='text-center my-3'>
+                                    <Button onClick={() => { setSessionId(getUniqueID); setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Create Session</Button>{' '}
+                                </div>
+                                <div className="text-center my-3">
+                                    <Form.Control type="text" placeholder="Session ID" className="my-2" value={sessionId} onChange={(e) => { setSessionId(e.target.value); }} />
+                                    <Button onClick={() => { if (!sessionId.length) { toast.error("Session ID cannot be empty!", { duration: 1000 }); return } setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join Session</Button>
+                                </div>
+                                <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
                             </div>
                         </>}
-                    </> : <>
-                        <Modal
-                            size="lg"
-                            show={modalShow}
-                            onHide={() => setModalShow(false)}
-                            backdrop="static"
-                            centered
-                        >
-                            <Modal.Header>
-                                <Modal.Title>
-                                    Join session {sessionId}?
-                                </Modal.Title>
-                            </Modal.Header>
-                            <Modal.Body>
-                                <p>You were invited to join session {sessionId}. Do you wanna join?</p>
-                            </Modal.Body>
-                            <Modal.Footer>
-                                <Button onClick={() => { setModalShow(false); setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join</Button>
-                                <Button onClick={() => { setModalShow(false); }}>Start different session</Button>
-                            </Modal.Footer>
-
-                        </Modal>
-                        <Modal
-                            size="sm"
-                            show={showError}
-                            onHide={() => setShowError(false)}
-                            backdrop="static"
-                            centered
-                        >
-                            <Modal.Header>
-                                <Modal.Title>
-                                    Connection lost.
-                                </Modal.Title>
-                            </Modal.Header>
-                            <Modal.Footer>
-                                <Button onClick={() => { setShowError(false); setJoined(true) }}>Reconnect</Button>
-                                <Button onClick={() => { setSessionId(""); setShowError(false); }}>Cancel</Button>
-                            </Modal.Footer>
-                        </Modal>
-                        <div className="text-center my-5 container">
-                            <h1>Welcome back {data?.user?.name}!</h1>
-                            <div className='text-center my-3'>
-                                <Button onClick={() => { setSessionId(getUniqueID); setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Create Session</Button>{' '}
-                            </div>
-                            <div className="text-center my-3">
-                                <Form.Control type="text" placeholder="Session ID" className="my-2" value={sessionId} onChange={(e) => { setSessionId(e.target.value); }} />
-                                <Button onClick={() => { if (!sessionId.length) { toast.error("Session ID cannot be empty!", { duration: 1000 }); return } setJoined(true); router.push({ pathname: '/', query: {} }, undefined, { shallow: true }) }}>Join Session</Button>
-                            </div>
-                            <p>Logged in as {data?.user?.name} <Button onClick={() => { signOut() }} size="sm">Logout</Button></p>
-                        </div>
                     </>}
-                </>}
+            </> : <>
+                <div className="absolute-center">
+                    <div className="text-center">
+                        <div className="loader">Loading...</div>
+                    </div>
+                </div>
+            </>}
         </main>
     )
 }
 
 export default Home
 
-
-function getSafe(fn: any, defaultVal: any = {}) {
-    try {
-        return fn();
-    } catch (e) {
-        return defaultVal;
-    }
-}
 
 
 function secondsToString(seconds: number) {
@@ -415,16 +454,46 @@ function secondsToString(seconds: number) {
 
 }
 
+function CategoryList({ list, client }: any) {
+    return list ? list.map((l: any) => {
+        return <div key={l.name}>
+            <span className="anchor" id={l.name}></span>
+            <Table striped bordered hover>
+                <thead style={{ "background": "black", "color": "white" }}>
+                    <tr>
+                        <th>{l.name}</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <SongList list={l.files} client={client} category={l.name} />
+                </tbody>
+            </Table>
+        </div>
+    }) : null
+}
 
-function SongList({ list, client }: any) {
-    return list ? list.map((l: any) => <Song file={l} client={client} key={l}></Song>) : null;
+
+function SongList({ list, client, category }: any) {
+    return list ? list.map((l: any) => <Song file={l} client={client} category={category} key={l}></Song>) : null;
 
 }
 
 
-function Song({ file, client }: any) {
+function Song({ file, client, category }: any) {
     return <>
-        <tr><td><p className='text-start'>{file}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => { client.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + file, fileName: file })) }}></FontAwesomeIcon></td></tr>
+        <tr><td><p className='text-start'>{file.replace(/\.[^/.]+$/, "")}</p></td><td><FontAwesomeIcon icon={faPlay} size="2x" onClick={() => { client.send(JSON.stringify({ type: "song_update", songUrl: remoteMusicLoc + "/" + category + "/" + file, fileName: file, category: category })) }}></FontAwesomeIcon></td></tr>
+    </>
+}
+
+
+function CategoryButtons({ categories }: any) {
+    return categories ? categories.map((c: any) => <CategoryButton name={c} key={c} />) : null
+}
+
+function CategoryButton({ name }: any) {
+    return <>
+        <Nav.Link href={`#${name}`}>{name}</Nav.Link>
     </>
 }
 
