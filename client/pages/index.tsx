@@ -78,6 +78,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   const [songsLoaded, setSongsLoaded] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(true);
 
   const toggleVisible = () => {
     const scrolled = document.documentElement.scrollTop;
@@ -309,7 +310,12 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       rap = element;
                     }}
                     src={currentSongUrl}
-                    autoPlay
+                    onCanPlay={() => {
+                      setAudioLoading(false);
+                      if (playerStatus !== "paused") {
+                        rap.audioEl.current.play();
+                      }
+                    }}
                     listenInterval={10}
                     onListen={(e) => {
                       if (wsLogin && !sliderInteraction) {
@@ -320,7 +326,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       }
                     }}
                     onPause={(e) => {
-                      if (wsLogin && !sliderInteraction && !wsBusy) {
+                      if (wsLogin && !sliderInteraction && !wsBusy && !audioLoading) {
                         client?.send(
                           JSON.stringify({ type: typeDefinition.PAUSE })
                         );
