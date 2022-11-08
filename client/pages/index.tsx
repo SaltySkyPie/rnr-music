@@ -23,6 +23,7 @@ import Table from "react-bootstrap/Table";
 import { w3cwebsocket as W3CWebSocket } from "websocket";
 import toast from "react-hot-toast";
 import { useRouter } from "next/router";
+import Head from 'next/head'
 
 let rap: any = {};
 let remoteMusicLoc = "file:///home/saltyskypie/Music/";
@@ -326,7 +327,12 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       }
                     }}
                     onPause={(e) => {
-                      if (wsLogin && !sliderInteraction && !wsBusy && !audioLoading) {
+                      if (
+                        wsLogin &&
+                        !sliderInteraction &&
+                        !wsBusy &&
+                        !audioLoading
+                      ) {
                         client?.send(
                           JSON.stringify({ type: typeDefinition.PAUSE })
                         );
@@ -341,6 +347,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     }}
                     preload={"auto"}
                     controls
+                    crossOrigin="anonymous"
                     style={{ display: "none" }}
                   />
                   {wsReady && wsLogin && songsLoaded ? (
@@ -729,6 +736,12 @@ function SongList({ list, client, category }: any) {
 function Song({ file, client, category }: any) {
   return (
     <>
+      <Head>
+        <link
+          rel="prefetch"
+          href={remoteMusicLoc + "/" + category + "/" + file}
+        />
+      </Head>
       <tr>
         <td>
           <p className="text-start">{file.replace(/\.[^/.]+$/, "")}</p>
