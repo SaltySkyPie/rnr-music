@@ -23,7 +23,7 @@ import Table from "react-bootstrap/Table";
 import { w3cwebsocket as W3CWebSocket } from "websocket";
 import toast from "react-hot-toast";
 import { useRouter } from "next/router";
-import Head from 'next/head'
+import Head from "next/head";
 
 let rap: any = {};
 let remoteMusicLoc = "file:///home/saltyskypie/Music/";
@@ -232,6 +232,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             setWsLogin(true);
             break;
           default:
+            if (!(dat.type == "pause" || dat.type == "play")) {
+              setAudioLoading(true);
+            }
             setCurrentSongUrl(dat.data.sessionData.currentSongUrl);
             rap.audioEl.current.currentTime =
               dat.data.sessionData.songTimestamp;
@@ -251,6 +254,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
 
   // update display of song name
   useEffect(() => {
+    if (!currentSongUrl) {
+      setAudioLoading(false);
+    }
     if (wsLogin) {
       const title = currentSongUrl
         .split("/music/")[1]
@@ -319,6 +325,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     }}
                     listenInterval={10}
                     onListen={(e) => {
+                      setAudioLoading(false);
                       if (wsLogin && !sliderInteraction) {
                         setTimestamp(e);
                         if (maxTimestamp != rap.audioEl.current.duration) {
@@ -354,104 +361,111 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                          <p>
-                            {playerStatus == "idle"
-                              ? "Select a song!"
-                              : currentSong}
-                          </p>
-                          <h1>
-                            {sliderInteraction
-                              ? secondsToString(Math.floor(sliderValue))
-                              : secondsToString(Math.floor(timestamp))}{" "}
-                            / {secondsToString(Math.floor(maxTimestamp))}
-                          </h1>
-
-                          <Slider
-                            max={maxTimestamp}
-                            min={0}
-                            defaultValue={0}
-                            value={
-                              sliderInteraction
-                                ? sliderValue
-                                : Math.floor(timestamp)
-                            }
-                            ariaLabelForHandle={`${timestamp}`}
-                            ariaValueTextFormatterForHandle={(value) => {
-                              return secondsToString(Math.floor(value));
-                            }}
-                            ariaLabelledByForHandle={`${timestamp}`}
-                            included={true}
-                            onBeforeChange={() => {
-                              setSliderInteraction(true);
-                            }}
-                            onAfterChange={() => {
-                              client?.send(
-                                JSON.stringify({
-                                  type: typeDefinition.TIME_UPDATE,
-                                  timestamp: sliderValue,
-                                })
-                              );
-                              setSliderInteraction(false);
-                            }}
-                            onChange={(value) => {
-                              setSliderValue(value as number);
-                            }}
-                            style={{ width: "80%", margin: "0 auto" }}
-                          />
-
-                          <div className="m-2">
-                            {previousSongs.length > 1 ? (
-                              <FontAwesomeIcon
-                                icon={faBackwardFast}
-                                size="2x"
-                                className="mx-3"
-                                onClick={() => {
-                                  if (!wsBusy) {
-                                  }
+                          {audioLoading ? (
+                            <>
+                              <div className="loader">Loading...</div>
+                            </>
+                          ) : (
+                            <>
+                              <p>
+                                {playerStatus == "idle"
+                                  ? "Select a song!"
+                                  : currentSong}
+                              </p>
+                              <h1>
+                                {sliderInteraction
+                                  ? secondsToString(Math.floor(sliderValue))
+                                  : secondsToString(Math.floor(timestamp))}{" "}
+                                / {secondsToString(Math.floor(maxTimestamp))}
+                              </h1>
+                              <Slider
+                                max={maxTimestamp}
+                                min={0}
+                                defaultValue={0}
+                                value={
+                                  sliderInteraction
+                                    ? sliderValue
+                                    : Math.floor(timestamp)
+                                }
+                                ariaLabelForHandle={`${timestamp}`}
+                                ariaValueTextFormatterForHandle={(value) => {
+                                  return secondsToString(Math.floor(value));
                                 }}
-                              ></FontAwesomeIcon>
-                            ) : null}
-                            {playerStatus == "idle" ||
-                            playerStatus == "paused" ? (
-                              <FontAwesomeIcon
-                                icon={faPlay}
-                                size="2x"
-                                className="mx-3"
-                                onClick={() => {
-                                  if (!wsBusy) rap.audioEl.current.play();
+                                ariaLabelledByForHandle={`${timestamp}`}
+                                included={true}
+                                onBeforeChange={() => {
+                                  setSliderInteraction(true);
                                 }}
-                              ></FontAwesomeIcon>
-                            ) : (
-                              <FontAwesomeIcon
-                                icon={faPause}
-                                size="2x"
-                                className="mx-3"
-                                onClick={() => {
-                                  if (!wsBusy) rap.audioEl.current.pause();
-                                }}
-                              ></FontAwesomeIcon>
-                            )}
-                            <FontAwesomeIcon
-                              icon={faForwardFast}
-                              size="2x"
-                              className="mx-3"
-                              onClick={() => {
-                                if (!wsBusy) {
+                                onAfterChange={() => {
                                   client?.send(
                                     JSON.stringify({
                                       type: typeDefinition.TIME_UPDATE,
-                                      timestamp: maxTimestamp + 1,
+                                      timestamp: sliderValue,
                                     })
                                   );
-                                  client?.send(
-                                    JSON.stringify({
-                                      type: typeDefinition.PAUSE,
-                                    })
-                                  );
-                                }
-                              }}
-                            ></FontAwesomeIcon>
-                          </div>
+                                  setSliderInteraction(false);
+                                }}
+                                onChange={(value) => {
+                                  setSliderValue(value as number);
+                                }}
+                                style={{ width: "80%", margin: "0 auto" }}
+                              />
+
+                              <div className="m-2">
+                                {previousSongs.length > 1 ? (
+                                  <FontAwesomeIcon
+                                    icon={faBackwardFast}
+                                    size="2x"
+                                    className="mx-3"
+                                    onClick={() => {
+                                      if (!wsBusy) {
+                                      }
+                                    }}
+                                  ></FontAwesomeIcon>
+                                ) : null}
+                                {playerStatus == "idle" ||
+                                playerStatus == "paused" ? (
+                                  <FontAwesomeIcon
+                                    icon={faPlay}
+                                    size="2x"
+                                    className="mx-3"
+                                    onClick={() => {
+                                      if (!wsBusy) rap.audioEl.current.play();
+                                    }}
+                                  ></FontAwesomeIcon>
+                                ) : (
+                                  <FontAwesomeIcon
+                                    icon={faPause}
+                                    size="2x"
+                                    className="mx-3"
+                                    onClick={() => {
+                                      if (!wsBusy) rap.audioEl.current.pause();
+                                    }}
+                                  ></FontAwesomeIcon>
+                                )}
+                                <FontAwesomeIcon
+                                  icon={faForwardFast}
+                                  size="2x"
+                                  className="mx-3"
+                                  onClick={() => {
+                                    if (!wsBusy) {
+                                      client?.send(
+                                        JSON.stringify({
+                                          type: typeDefinition.TIME_UPDATE,
+                                          timestamp: maxTimestamp + 1,
+                                        })
+                                      );
+                                      client?.send(
+                                        JSON.stringify({
+                                          type: typeDefinition.PAUSE,
+                                        })
+                                      );
+                                    }
+                                  }}
+                                ></FontAwesomeIcon>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="text-center login-container">
