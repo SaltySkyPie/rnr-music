@@ -1,11 +1,7 @@
 import type { NextPage } from "next";
 import Image from "react-bootstrap/Image";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faFacebook,
-  faGoogle,
-  faInstagram,
-} from "@fortawesome/free-brands-svg-icons";
+import { faFacebook, faGoogle } from "@fortawesome/free-brands-svg-icons";
 import {
   faPlay,
   faPause,
@@ -16,7 +12,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Button, Container, Form, Modal, Nav, Navbar } from "react-bootstrap";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import ReactAudioPlayer from "react-audio-player";
 import Slider from "rc-slider";
 import Table from "react-bootstrap/Table";
@@ -317,7 +313,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       rap = element;
                     }}
                     src={currentSongUrl}
-                    onCanPlay={() => {
+                    onCanPlayThrough={() => {
                       setAudioLoading(false);
                       if (playerStatus !== "paused") {
                         rap.audioEl.current.play();
@@ -361,7 +357,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                          {audioLoading ? (
+                          {audioLoading && !sliderInteraction ? (
                             <>
                               <div className="loader">Loading...</div>
                             </>
@@ -394,19 +390,35 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                 ariaLabelledByForHandle={`${timestamp}`}
                                 included={true}
                                 onBeforeChange={() => {
-                                  setSliderInteraction(true);
-                                }}
-                                onAfterChange={() => {
+                                  setSliderValue(timestamp);
                                   client?.send(
                                     JSON.stringify({
-                                      type: typeDefinition.TIME_UPDATE,
-                                      timestamp: sliderValue,
+                                      type: typeDefinition.PAUSE,
                                     })
                                   );
+                                  setSliderInteraction(true);
+                                }}
+                                onAfterChange={async () => {
                                   setSliderInteraction(false);
+                                  setTimeout(() => {
+                                    client?.send(
+                                      JSON.stringify({
+                                        type: typeDefinition.PLAY,
+                                      })
+                                    );
+                                  }, 250);
                                 }}
                                 onChange={(value) => {
+                                  const sendData = async () => {
+                                    client?.send(
+                                      JSON.stringify({
+                                        type: typeDefinition.TIME_UPDATE,
+                                        timestamp: value,
+                                      })
+                                    );
+                                  };
                                   setSliderValue(value as number);
+                                  setTimeout(sendData, 250);
                                 }}
                                 style={{ width: "80%", margin: "0 auto" }}
                               />
@@ -452,7 +464,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                       client?.send(
                                         JSON.stringify({
                                           type: typeDefinition.TIME_UPDATE,
-                                          timestamp: maxTimestamp + 1,
+                                          timestamp: maxTimestamp + 69,
                                         })
                                       );
                                       client?.send(
