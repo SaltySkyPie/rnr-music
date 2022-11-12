@@ -319,7 +319,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         rap.audioEl.current.play();
                       }
                     }}
-                    listenInterval={10}
+                    listenInterval={250}
                     onListen={(e) => {
                       setAudioLoading(false);
                       if (wsLogin && !sliderInteraction) {
@@ -352,7 +352,26 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     controls
                     crossOrigin="anonymous"
                     style={{ display: "none" }}
-                  />
+                  >
+                    {songList
+                      ? songList.map((c: any) =>
+                          c.files
+                            ? c.files.map((s: any) => {
+                                return (
+                                  <source
+                                    src={
+                                      remoteMusicLoc + "/" + c.name + "/" + s
+                                    }
+                                    key={
+                                      remoteMusicLoc + "/" + c.name + "/" + s
+                                    }
+                                  ></source>
+                                );
+                              })
+                            : null
+                        )
+                      : null}
+                  </ReactAudioPlayer>
                   {wsReady && wsLogin && songsLoaded ? (
                     <>
                       <div className="absolute-wrap">
@@ -762,12 +781,6 @@ function SongList({ list, client, category }: any) {
 function Song({ file, client, category }: any) {
   return (
     <>
-      <Head>
-        <link
-          rel="prefetch"
-          href={remoteMusicLoc + "/" + category + "/" + file}
-        />
-      </Head>
       <tr>
         <td>
           <p className="text-start">{file.replace(/\.[^/.]+$/, "")}</p>
