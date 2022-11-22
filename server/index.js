@@ -31,6 +31,7 @@ const typeDefinition = {
   SONG_UPDATE: "song_update",
   TIME_UPDATE: "time_update",
   MESSAGE: "msg",
+  GET: "get",
 };
 const clients = {};
 let users = {};
@@ -198,13 +199,26 @@ wsServer.on("request", function (request) {
                 },
               })
             );
-          },1000)
+          }, 1000);
           sendMessage(
             JSON.stringify({
               type: typeDefinition.MESSAGE,
               sessionId: users[userID].sessionId,
               data: {
                 message: `${users[userID].username} joined the session!`,
+                sessionData: sessionData[users[userID].sessionId],
+              },
+            })
+          );
+          break;
+        case typeDefinition.GET:
+          clients[userID].sendUTF(
+            JSON.stringify({
+              type: typeDefinition.GET,
+              userId: users[userID].id,
+              sessionId: users[userID].sessionId,
+              data: {
+                userId: userID,
                 sessionData: sessionData[users[userID].sessionId],
               },
             })

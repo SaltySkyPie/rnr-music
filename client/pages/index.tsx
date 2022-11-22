@@ -78,6 +78,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   const [visible, setVisible] = useState(false);
   const [audioLoading, setAudioLoading] = useState(true);
   const [title, setTitle] = useState("TŠ TWIST MUSIC SYSTEM");
+  const [muted, setMuted] = useState(true);
+  const [controller, setController] = useState(false);
 
   const toggleVisible = () => {
     const scrolled = document.documentElement.scrollTop;
@@ -107,6 +109,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     SONG_UPDATE: "song_update",
     TIME_UPDATE: "time_update",
     MESSAGE: "msg",
+    GET: "get",
   };
 
   // show invite modal on load with link
@@ -208,6 +211,11 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   useEffect(() => {
     if (status === "authenticated" && wsReady) {
       logInUser();
+      if (controller) {
+        setInterval(() => {
+          client?.send(JSON.stringify({ type: typeDefinition.GET }));
+        }, 1000);
+      }
       client!.onmessage = (message: any) => {
         setWsBusy(true);
         const dat = JSON.parse(message.data as string);
@@ -222,20 +230,31 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
           case typeDefinition.LOGIN:
             setSessionUserId(dat.data.userId);
             setCurrentSongUrl(dat.data.sessionData.currentSongUrl);
-            rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
-            setTimestamp(rap.getCurrentTime());
-            setMaxTimestamp(rap.getDuration());
+            if (!controller) {
+              rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
+              setTimestamp(rap.getCurrentTime());
+              setMaxTimestamp(rap.getDuration());
+            } else {
+              setTimestamp(dat.data.sessionData.songTimestamp);
+              setMaxTimestamp(dat.data.sessionData.songMaxTimestamp);
+            }
             setPlayerStatus(dat.data.sessionData.songState);
             setWsLogin(true);
             break;
           default:
+            setMuted(true);
             if (!(dat.type == "pause" || dat.type == "play")) {
               setAudioLoading(true);
             }
             setCurrentSongUrl(dat.data.sessionData.currentSongUrl);
-            rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
-            setTimestamp(rap.getCurrentTime());
-            setMaxTimestamp(rap.getDuration());
+            if (!controller) {
+              rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
+              setTimestamp(rap.getCurrentTime());
+              setMaxTimestamp(rap.getDuration());
+            } else {
+              setTimestamp(dat.data.sessionData.songTimestamp);
+              setMaxTimestamp(dat.data.sessionData.songMaxTimestamp);
+            }
             setPlayerStatus(dat.data.sessionData.songState);
             break;
         }
@@ -304,65 +323,79 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             <>
               {joined ? (
                 <>
-                  <ReactPlayer
-                    ref={(element) => {
-                      rap = element;
-                    }}
-                    url={currentSongUrl}
-                    progressInterval={250}
-                    stopOnUnmount={false}
-                    playing={playerStatus == "playing" ? true : false}
-                    controls={true}
-                    playsinline={true}
-                    autoPlay
-                    onReady={() => {
-                    }}
-                    onProgress={(e) => {
-                      setAudioLoading(false);
-                      if (wsLogin && !sliderInteraction) {
-                        setTimestamp(e.playedSeconds);
-                      }
-                    }}
-                    onPlay={() => {
-                      if (wsLogin && !sliderInteraction && !wsBusy) {
-                        client?.send(
-                          JSON.stringify({ type: typeDefinition.PLAY })
-                        );
-                      }
-                    }}
-                    onPause={() => {
-                      if (
-                        wsLogin &&
-                        !sliderInteraction &&
-                        !wsBusy &&
-                        !audioLoading
-                      ) {
-                        client?.send(
-                          JSON.stringify({ type: typeDefinition.PAUSE })
-                        );
-                      }
-                    }}
-                    onDuration={(e) => {
-                      setMaxTimestamp(e);
-                    }}
-                    onBuffer={() => {
-                      setAudioLoading(true);
-                    }}
-                    onBufferEnd={() => {
-                      setAudioLoading(false);
-                    }}
-                    onError={(e) => {
-                      toast.error(JSON.stringify(e))
-                    }}
-                    style={{ display: "none" }}
-                  ></ReactPlayer>
+                  {controller ? null : (
+                    <>
+                      <ReactPlayer
+                        ref={(element) => {
+                          rap = element;
+                        }}
+                        url={currentSongUrl}
+                        progressInterval={250}
+                        stopOnUnmount={false}
+                        playing={playerStatus == "playing" ? true : false}
+                        controls={true}
+                        playsinline={true}
+                        muted={muted}
+                        autoPlay
+                        width="100%"
+                        height="auto"
+                        onReady={() => {
+                          setPlayerStatus("playing");
+                        }}
+                        onProgress={(e) => {
+                          setMuted(false);
+                          setAudioLoading(false);
+                          if (wsLogin && !sliderInteraction) {
+                            setTimestamp(e.playedSeconds);
+                          }
+                        }}
+                        onPlay={() => {
+                          if (wsLogin && !sliderInteraction && !wsBusy) {
+                            client?.send(
+                              JSON.stringify({ type: typeDefinition.PLAY })
+                            );
+                          }
+                        }}
+                        onPause={() => {
+                          if (
+                            wsLogin &&
+                            !sliderInteraction &&
+                            !wsBusy &&
+                            !audioLoading
+                          ) {
+                            client?.send(
+                              JSON.stringify({ type: typeDefinition.PAUSE })
+                            );
+                          }
+                        }}
+                        onDuration={(e) => {
+                          setMaxTimestamp(e);
+                        }}
+                        onBuffer={() => {
+                          setAudioLoading(true);
+                        }}
+                        onBufferEnd={() => {
+                          setAudioLoading(false);
+                        }}
+                        config={{
+                          file: {
+                            hlsOptions: {
+                              debug: true,
+                            },
+                          },
+                        }}
+                        className="player"
+                        style={{
+                          display: "none",
+                        }}
+                      ></ReactPlayer>
+                    </>
+                  )}
                   {wsReady && wsLogin && songsLoaded ? (
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                          {audioLoading &&
-                          !audioLoading &&
-                          !sliderInteraction ? (
+                          {audioLoading && !controller && !sliderInteraction ? (
                             <>
                               <div className="loader">Loading...</div>
                             </>
@@ -450,7 +483,11 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                         className="mx-1"
                                         onClick={() => {
                                           if (!wsBusy)
-                                            setPlayerStatus("playing");
+                                            client?.send(
+                                              JSON.stringify({
+                                                type: typeDefinition.PLAY,
+                                              })
+                                            );
                                         }}
                                       >
                                         <FontAwesomeIcon
@@ -463,7 +500,11 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                         className="mx-1"
                                         onClick={() => {
                                           if (!wsBusy)
-                                            setPlayerStatus("paused");
+                                            client?.send(
+                                              JSON.stringify({
+                                                type: typeDefinition.PAUSE,
+                                              })
+                                            );
                                         }}
                                       >
                                         <FontAwesomeIcon
@@ -658,15 +699,30 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <h1>Welcome back {data?.user?.name}!</h1>
                     <div className="text-center my-3">
                       <Button
+                        className="mx-1"
                         onClick={() => {
                           setSessionId(getUniqueID);
+                          setController(false);
                           setJoined(true);
                           router.push({ pathname: "/", query: {} }, undefined, {
                             shallow: true,
                           });
                         }}
                       >
-                        Create Session
+                        Create Session & Join as Player
+                      </Button>
+                      <Button
+                        className="mx-1"
+                        onClick={() => {
+                          setSessionId(getUniqueID);
+                          setController(true);
+                          setJoined(true);
+                          router.push({ pathname: "/", query: {} }, undefined, {
+                            shallow: true,
+                          });
+                        }}
+                      >
+                        Create Session & Join as Controller
                       </Button>{" "}
                     </div>
                     <div className="text-center my-3">
@@ -678,8 +734,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         onChange={(e) => {
                           setSessionId(e.target.value);
                         }}
-                      />
+                      />{" "}
                       <Button
+                        className="mx-1"
                         onClick={() => {
                           if (!sessionId.length) {
                             toast.error("Session ID cannot be empty!", {
@@ -687,13 +744,32 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             });
                             return;
                           }
+                          setController(false);
                           setJoined(true);
                           router.push({ pathname: "/", query: {} }, undefined, {
                             shallow: true,
                           });
                         }}
                       >
-                        Join Session
+                        Join Session as Player
+                      </Button>
+                      <Button
+                        className="mx-1"
+                        onClick={() => {
+                          if (!sessionId.length) {
+                            toast.error("Session ID cannot be empty!", {
+                              duration: 1000,
+                            });
+                            return;
+                          }
+                          setController(true);
+                          setJoined(true);
+                          router.push({ pathname: "/", query: {} }, undefined, {
+                            shallow: true,
+                          });
+                        }}
+                      >
+                        Join Session as Controller
                       </Button>
                     </div>
                     <p>

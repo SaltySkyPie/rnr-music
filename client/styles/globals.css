@@ -112,3 +112,7 @@ main {
   position: absolute;
   transform: translateY(-21vh);
 }
+
+.player {
+  display: none !important;
+}

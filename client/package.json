@@ -12,6 +12,7 @@
     "bootstrap": "^5.2.2",
     "next": "12.3.1",
     "next-auth": "^4.12.3",
+    "next-pwa": "^5.6.0",
     "rc-slider": "^10.0.1",
     "react": "18.2.0",
     "react-audio-player": "^0.17.0",
