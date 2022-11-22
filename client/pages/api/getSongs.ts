@@ -23,9 +23,9 @@ export default async function handler(
 
 const getFiles = (dir: any) =>
   new Promise((resolve) => {
-    fs.readdir(`${process.env.LOCAL_MUSIC}/${dir}` as string, (err, files) => {
-      resolve(files.sort());
-    });
+    const files = fs.readdirSync(`${process.env.LOCAL_MUSIC}/${dir}` as string).filter((file) => file.endsWith(".m3u8"));
+    files.sort();
+    resolve(files)
   });
 
 const getDirectories = async (source: any) =>

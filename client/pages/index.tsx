@@ -19,12 +19,13 @@ import Table from "react-bootstrap/Table";
 import { w3cwebsocket as W3CWebSocket } from "websocket";
 import toast from "react-hot-toast";
 import { useRouter } from "next/router";
+import ReactPlayer from "react-player";
 import Head from "next/head";
 
 let rap: any = {};
 let remoteMusicLoc = "file:///home/saltyskypie/Music/";
 const wsHost = "wss://skippies.fun/music/ws";
-//const wsHost = "ws://localhost:8081"
+//const wsHost = "ws://localhost:8081";
 
 export async function getStaticProps(ctx: any) {
   const { req, query, res, asPath, pathname } = ctx;
@@ -76,6 +77,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   const [categories, setCategories] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const [audioLoading, setAudioLoading] = useState(true);
+  const [title, setTitle] = useState("TŠ TWIST MUSIC SYSTEM");
 
   const toggleVisible = () => {
     const scrolled = document.documentElement.scrollTop;
@@ -210,7 +212,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         setWsBusy(true);
         const dat = JSON.parse(message.data as string);
         console.log(dat);
-
+        //toast(JSON.stringify(dat))
         if (dat.sessionId != sessionId) return;
 
         switch (dat.type) {
@@ -220,10 +222,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
           case typeDefinition.LOGIN:
             setSessionUserId(dat.data.userId);
             setCurrentSongUrl(dat.data.sessionData.currentSongUrl);
-            rap.audioEl.current.currentTime =
-              dat.data.sessionData.songTimestamp;
-            setTimestamp(rap.audioEl.current.currentTime);
-            setMaxTimestamp(dat.data.sessionData.songMaxTimestamp);
+            rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
+            setTimestamp(rap.getCurrentTime());
+            setMaxTimestamp(rap.getDuration());
             setPlayerStatus(dat.data.sessionData.songState);
             setWsLogin(true);
             break;
@@ -232,10 +233,9 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
               setAudioLoading(true);
             }
             setCurrentSongUrl(dat.data.sessionData.currentSongUrl);
-            rap.audioEl.current.currentTime =
-              dat.data.sessionData.songTimestamp;
-            setTimestamp(rap.audioEl.current.currentTime);
-            setMaxTimestamp(dat.data.sessionData.songMaxTimestamp);
+            rap.seekTo(dat.data.sessionData.songTimestamp, "seconds");
+            setTimestamp(rap.getCurrentTime());
+            setMaxTimestamp(rap.getDuration());
             setPlayerStatus(dat.data.sessionData.songState);
             break;
         }
@@ -254,26 +254,22 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
       setAudioLoading(false);
     }
     if (wsLogin) {
-      const title = currentSongUrl
+      const stitle = currentSongUrl
         .split("/music/")[1]
         .replace(/\.[^/.]+$/, "")
+        .replace(/\.[^/.]+$/, "")
         .replace("/", " | ");
-      rap.audioEl.current.title = title;
-      setCurrentSong(title);
+      //rap.audioEl.current.title = title;
+      setCurrentSong(stitle);
+      setTitle(stitle + " - TŠ TWIST MUSIC SYSTEM");
     }
   }, [currentSongUrl]);
 
-  useEffect(() => {
-    if (!wsReady || sliderInteraction) return;
-    if (playerStatus == "paused") {
-      rap.audioEl.current.pause();
-    } else if (playerStatus == "playing") {
-      rap.audioEl.current.play();
-    }
-  }, [playerStatus, wsLogin, sliderInteraction]);
-
   return (
     <main className="container">
+      <Head>
+        <title>{title}</title>
+      </Head>
       {status !== "loading" ? (
         <>
           {!data?.user && status !== "authenticated" ? (
@@ -308,28 +304,33 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             <>
               {joined ? (
                 <>
-                  <ReactAudioPlayer
+                  <ReactPlayer
                     ref={(element) => {
                       rap = element;
                     }}
-                    src={currentSongUrl}
-                    onCanPlayThrough={() => {
-                      setAudioLoading(false);
-                      if (playerStatus !== "paused") {
-                        rap.audioEl.current.play();
-                      }
+                    url={currentSongUrl}
+                    progressInterval={250}
+                    stopOnUnmount={false}
+                    playing={playerStatus == "playing" ? true : false}
+                    controls={true}
+                    playsinline={true}
+                    autoPlay
+                    onReady={() => {
                     }}
-                    listenInterval={250}
-                    onListen={(e) => {
+                    onProgress={(e) => {
                       setAudioLoading(false);
                       if (wsLogin && !sliderInteraction) {
-                        setTimestamp(e);
-                        if (maxTimestamp != rap.audioEl.current.duration) {
-                          setMaxTimestamp(rap.audioEl.current.duration);
-                        }
+                        setTimestamp(e.playedSeconds);
                       }
                     }}
-                    onPause={(e) => {
+                    onPlay={() => {
+                      if (wsLogin && !sliderInteraction && !wsBusy) {
+                        client?.send(
+                          JSON.stringify({ type: typeDefinition.PLAY })
+                        );
+                      }
+                    }}
+                    onPause={() => {
                       if (
                         wsLogin &&
                         !sliderInteraction &&
@@ -341,42 +342,27 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         );
                       }
                     }}
-                    onPlay={(e) => {
-                      if (wsLogin && !sliderInteraction && !wsBusy) {
-                        client?.send(
-                          JSON.stringify({ type: typeDefinition.PLAY })
-                        );
-                      }
+                    onDuration={(e) => {
+                      setMaxTimestamp(e);
                     }}
-                    preload={"auto"}
-                    controls
-                    crossOrigin="anonymous"
+                    onBuffer={() => {
+                      setAudioLoading(true);
+                    }}
+                    onBufferEnd={() => {
+                      setAudioLoading(false);
+                    }}
+                    onError={(e) => {
+                      toast.error(JSON.stringify(e))
+                    }}
                     style={{ display: "none" }}
-                  >
-                    {songList
-                      ? songList.map((c: any) =>
-                          c.files
-                            ? c.files.map((s: any) => {
-                                return (
-                                  <source
-                                    src={
-                                      remoteMusicLoc + "/" + c.name + "/" + s
-                                    }
-                                    key={
-                                      remoteMusicLoc + "/" + c.name + "/" + s
-                                    }
-                                  ></source>
-                                );
-                              })
-                            : null
-                        )
-                      : null}
-                  </ReactAudioPlayer>
+                  ></ReactPlayer>
                   {wsReady && wsLogin && songsLoaded ? (
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                          {audioLoading && !sliderInteraction ? (
+                          {audioLoading &&
+                          !audioLoading &&
+                          !sliderInteraction ? (
                             <>
                               <div className="loader">Loading...</div>
                             </>
@@ -441,60 +427,77 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                 }}
                                 style={{ width: "80%", margin: "0 auto" }}
                               />
-
-                              <div className="m-2">
-                                {previousSongs.length > 1 ? (
-                                  <FontAwesomeIcon
-                                    icon={faBackwardFast}
-                                    size="2x"
-                                    className="mx-3"
-                                    onClick={() => {
-                                      if (!wsBusy) {
-                                      }
-                                    }}
-                                  ></FontAwesomeIcon>
-                                ) : null}
-                                {playerStatus == "idle" ||
-                                playerStatus == "paused" ? (
-                                  <FontAwesomeIcon
-                                    icon={faPlay}
-                                    size="2x"
-                                    className="mx-3"
-                                    onClick={() => {
-                                      if (!wsBusy) rap.audioEl.current.play();
-                                    }}
-                                  ></FontAwesomeIcon>
-                                ) : (
-                                  <FontAwesomeIcon
-                                    icon={faPause}
-                                    size="2x"
-                                    className="mx-3"
-                                    onClick={() => {
-                                      if (!wsBusy) rap.audioEl.current.pause();
-                                    }}
-                                  ></FontAwesomeIcon>
-                                )}
-                                <FontAwesomeIcon
-                                  icon={faForwardFast}
-                                  size="2x"
-                                  className="mx-3"
-                                  onClick={() => {
-                                    if (!wsBusy) {
-                                      client?.send(
-                                        JSON.stringify({
-                                          type: typeDefinition.TIME_UPDATE,
-                                          timestamp: maxTimestamp + 69,
-                                        })
-                                      );
-                                      client?.send(
-                                        JSON.stringify({
-                                          type: typeDefinition.PAUSE,
-                                        })
-                                      );
-                                    }
-                                  }}
-                                ></FontAwesomeIcon>
-                              </div>
+                              {playerStatus != "idle" ? (
+                                <>
+                                  {" "}
+                                  <div className="m-2">
+                                    {previousSongs.length > 1 ? (
+                                      <Button
+                                        className="mx-1"
+                                        onClick={() => {
+                                          if (!wsBusy) {
+                                          }
+                                        }}
+                                      >
+                                        <FontAwesomeIcon
+                                          icon={faBackwardFast}
+                                          size="2x"
+                                        ></FontAwesomeIcon>
+                                      </Button>
+                                    ) : null}
+                                    {playerStatus == "paused" ? (
+                                      <Button
+                                        className="mx-1"
+                                        onClick={() => {
+                                          if (!wsBusy)
+                                            setPlayerStatus("playing");
+                                        }}
+                                      >
+                                        <FontAwesomeIcon
+                                          icon={faPlay}
+                                          size="2x"
+                                        ></FontAwesomeIcon>
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        className="mx-1"
+                                        onClick={() => {
+                                          if (!wsBusy)
+                                            setPlayerStatus("paused");
+                                        }}
+                                      >
+                                        <FontAwesomeIcon
+                                          icon={faPause}
+                                          size="2x"
+                                        ></FontAwesomeIcon>
+                                      </Button>
+                                    )}
+                                    <Button
+                                      className="mx-1"
+                                      onClick={() => {
+                                        if (!wsBusy) {
+                                          client?.send(
+                                            JSON.stringify({
+                                              type: typeDefinition.TIME_UPDATE,
+                                              timestamp: maxTimestamp + 999999,
+                                            })
+                                          );
+                                          client?.send(
+                                            JSON.stringify({
+                                              type: typeDefinition.PAUSE,
+                                            })
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <FontAwesomeIcon
+                                        icon={faForwardFast}
+                                        size="2x"
+                                      ></FontAwesomeIcon>
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : null}
                             </>
                           )}
                         </div>
@@ -783,7 +786,9 @@ function Song({ file, client, category }: any) {
     <>
       <tr>
         <td>
-          <p className="text-start">{file.replace(/\.[^/.]+$/, "")}</p>
+          <p className="text-start">
+            {file.replace(/\.[^/.]+$/, "").replace(/\.[^/.]+$/, "")}
+          </p>
         </td>
         <td>
           <FontAwesomeIcon

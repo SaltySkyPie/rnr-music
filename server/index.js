@@ -80,7 +80,7 @@ const updateSessions = () => {
         const s = songList[Math.floor(Math.random() * songList.length)];
         sessionData[key].currentSongUrl =
           REMOTE_MUSIC + "/" + s.category + "/" + s.file;
-        sessionData[key].songState = "playing";
+        sessionData[key].songState = "paused";
         sessionData[key].songTimestamp = 0;
         getAudioDurationInSeconds(
           LOCAL_MUSIC + "/" + s.category + "/" + s.file
@@ -97,6 +97,21 @@ const updateSessions = () => {
               },
             })
           );
+          setTimeout(() => {
+            sessionData[key].songState = "playing";
+            sessionData[key].songTimestamp = 0;
+            sendMessage(
+              JSON.stringify({
+                type: typeDefinition.SONG_UPDATE,
+                sessionId: key,
+                data: {
+                  songUrl: sessionData[key].currentSongUrl,
+                  by: "server",
+                  sessionData: sessionData[key],
+                },
+              })
+            );
+          }, 1000);
         });
       }
     }
@@ -160,6 +175,30 @@ wsServer.on("request", function (request) {
               },
             })
           );
+          clients[userID].sendUTF(
+            JSON.stringify({
+              type: typeDefinition.PAUSE,
+              userId: users[userID].id,
+              sessionId: users[userID].sessionId,
+              data: {
+                userId: userID,
+                sessionData: sessionData[users[userID].sessionId],
+              },
+            })
+          );
+          setTimeout(() => {
+            clients[userID].sendUTF(
+              JSON.stringify({
+                type: typeDefinition.PLAY,
+                userId: users[userID].id,
+                sessionId: users[userID].sessionId,
+                data: {
+                  userId: userID,
+                  sessionData: sessionData[users[userID].sessionId],
+                },
+              })
+            );
+          },1000)
           sendMessage(
             JSON.stringify({
               type: typeDefinition.MESSAGE,
@@ -229,6 +268,7 @@ wsServer.on("request", function (request) {
             );
             setTimeout(() => {
               sessionData[users[userID].sessionId].songState = "playing";
+              sessionData[users[userID].sessionId].songTimestamp = 0;
               sendMessage(
                 JSON.stringify({
                   type: typeDefinition.SONG_UPDATE,
