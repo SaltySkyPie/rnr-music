@@ -395,12 +395,6 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                          {audioLoading && !controller && !sliderInteraction ? (
-                            <>
-                              <div className="loader">Loading...</div>
-                            </>
-                          ) : (
-                            <>
                               <p>
                                 {playerStatus == "idle"
                                   ? "Select a song!"
@@ -539,8 +533,6 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                                   </div>
                                 </>
                               ) : null}
-                            </>
-                          )}
                         </div>
                       </div>
                       <div className="text-center login-container">
@@ -862,7 +854,7 @@ function Song({ file, client, category }: any) {
     <>
       <tr>
         <td>
-          <p className="text-start">
+          <p className="text-start song-name">
             {file.replace(/\.[^/.]+$/, "").replace(/\.[^/.]+$/, "")}
           </p>
         </td>

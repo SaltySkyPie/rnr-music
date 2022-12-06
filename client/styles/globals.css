@@ -116,3 +116,8 @@ main {
 .player {
   display: none !important;
 }
+
+.song-name {
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+}
