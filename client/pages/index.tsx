@@ -80,6 +80,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   const [title, setTitle] = useState("TŠ TWIST MUSIC SYSTEM");
   const [muted, setMuted] = useState(true);
   const [controller, setController] = useState(false);
+  const [afterSongUpdate, setAfterSongUpdate] = useState(false);
 
   const toggleVisible = () => {
     const scrolled = document.documentElement.scrollTop;
@@ -214,7 +215,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
       if (controller) {
         setInterval(() => {
           client?.send(JSON.stringify({ type: typeDefinition.GET }));
-        }, 1000);
+        }, 500);
       }
       client!.onmessage = (message: any) => {
         setWsBusy(true);
@@ -255,7 +256,15 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
               setTimestamp(dat.data.sessionData.songTimestamp);
               setMaxTimestamp(dat.data.sessionData.songMaxTimestamp);
             }
-            setPlayerStatus(dat.data.sessionData.songState);
+            if (
+              dat.type == "song_update" &&
+              dat.data.sessionData.songState == "paused"
+            ) {
+              setAfterSongUpdate(true);
+            } else {
+              setAfterSongUpdate(false);
+              setPlayerStatus(dat.data.sessionData.songState);
+            }
             break;
         }
 
@@ -330,17 +339,16 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           rap = element;
                         }}
                         url={currentSongUrl}
-                        progressInterval={250}
+                        progressInterval={100}
                         stopOnUnmount={false}
                         playing={playerStatus == "playing" ? true : false}
                         controls={true}
                         playsinline={true}
                         muted={muted}
-                        autoPlay
                         width="100%"
                         height="auto"
                         onReady={() => {
-                          setPlayerStatus("playing");
+                          //setPlayerStatus("playing");
                         }}
                         onProgress={(e) => {
                           setMuted(false);
@@ -350,7 +358,12 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           }
                         }}
                         onPlay={() => {
-                          if (wsLogin && !sliderInteraction && !wsBusy) {
+                          if (
+                            wsLogin &&
+                            !sliderInteraction &&
+                            !wsBusy &&
+                            !afterSongUpdate
+                          ) {
                             client?.send(
                               JSON.stringify({ type: typeDefinition.PLAY })
                             );
@@ -361,7 +374,8 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             wsLogin &&
                             !sliderInteraction &&
                             !wsBusy &&
-                            !audioLoading
+                            !audioLoading &&
+                            !afterSongUpdate
                           ) {
                             client?.send(
                               JSON.stringify({ type: typeDefinition.PAUSE })
@@ -395,144 +409,144 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <>
                       <div className="absolute-wrap">
                         <div className="text-center my-4 container">
-                              <p>
-                                {playerStatus == "idle"
-                                  ? "Select a song!"
-                                  : currentSong}
-                              </p>
-                              <h1>
-                                {sliderInteraction
-                                  ? secondsToString(Math.floor(sliderValue))
-                                  : secondsToString(Math.floor(timestamp))}{" "}
-                                / {secondsToString(Math.floor(maxTimestamp))}
-                              </h1>
-                              <Slider
-                                max={maxTimestamp}
-                                min={0}
-                                defaultValue={0}
-                                value={
-                                  sliderInteraction
-                                    ? sliderValue
-                                    : Math.floor(timestamp)
-                                }
-                                ariaLabelForHandle={`${timestamp}`}
-                                ariaValueTextFormatterForHandle={(value) => {
-                                  return secondsToString(Math.floor(value));
-                                }}
-                                ariaLabelledByForHandle={`${timestamp}`}
-                                included={true}
-                                onBeforeChange={() => {
-                                  setSliderValue(timestamp);
-                                  client?.send(
-                                    JSON.stringify({
-                                      type: typeDefinition.PAUSE,
-                                    })
-                                  );
-                                  setSliderInteraction(true);
-                                }}
-                                onAfterChange={async () => {
-                                  setSliderInteraction(false);
-                                  setTimeout(() => {
-                                    client?.send(
-                                      JSON.stringify({
-                                        type: typeDefinition.PLAY,
-                                      })
-                                    );
-                                  }, 250);
-                                }}
-                                onChange={(value) => {
-                                  const sendData = async () => {
-                                    client?.send(
-                                      JSON.stringify({
-                                        type: typeDefinition.TIME_UPDATE,
-                                        timestamp: value,
-                                      })
-                                    );
-                                  };
-                                  setSliderValue(value as number);
-                                  setTimeout(sendData, 250);
-                                }}
-                                style={{ width: "80%", margin: "0 auto" }}
-                              />
-                              {playerStatus != "idle" ? (
-                                <>
-                                  {" "}
-                                  <div className="m-2">
-                                    {previousSongs.length > 1 ? (
-                                      <Button
-                                        className="mx-1"
-                                        onClick={() => {
-                                          if (!wsBusy) {
-                                          }
-                                        }}
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faBackwardFast}
-                                          size="2x"
-                                        ></FontAwesomeIcon>
-                                      </Button>
-                                    ) : null}
-                                    {playerStatus == "paused" ? (
-                                      <Button
-                                        className="mx-1"
-                                        onClick={() => {
-                                          if (!wsBusy)
-                                            client?.send(
-                                              JSON.stringify({
-                                                type: typeDefinition.PLAY,
-                                              })
-                                            );
-                                        }}
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faPlay}
-                                          size="2x"
-                                        ></FontAwesomeIcon>
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        className="mx-1"
-                                        onClick={() => {
-                                          if (!wsBusy)
-                                            client?.send(
-                                              JSON.stringify({
-                                                type: typeDefinition.PAUSE,
-                                              })
-                                            );
-                                        }}
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faPause}
-                                          size="2x"
-                                        ></FontAwesomeIcon>
-                                      </Button>
-                                    )}
-                                    <Button
-                                      className="mx-1"
-                                      onClick={() => {
-                                        if (!wsBusy) {
-                                          client?.send(
-                                            JSON.stringify({
-                                              type: typeDefinition.TIME_UPDATE,
-                                              timestamp: maxTimestamp + 999999,
-                                            })
-                                          );
-                                          client?.send(
-                                            JSON.stringify({
-                                              type: typeDefinition.PAUSE,
-                                            })
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={faForwardFast}
-                                        size="2x"
-                                      ></FontAwesomeIcon>
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : null}
+                          <p>
+                            {playerStatus == "idle"
+                              ? "Select a song!"
+                              : currentSong}
+                          </p>
+                          <h1>
+                            {sliderInteraction
+                              ? secondsToString(Math.floor(sliderValue))
+                              : secondsToString(Math.floor(timestamp))}{" "}
+                            / {secondsToString(Math.floor(maxTimestamp))}
+                          </h1>
+                          <Slider
+                            max={maxTimestamp}
+                            min={0}
+                            defaultValue={0}
+                            value={
+                              sliderInteraction
+                                ? sliderValue
+                                : Math.floor(timestamp)
+                            }
+                            ariaLabelForHandle={`${timestamp}`}
+                            ariaValueTextFormatterForHandle={(value) => {
+                              return secondsToString(Math.floor(value));
+                            }}
+                            ariaLabelledByForHandle={`${timestamp}`}
+                            included={true}
+                            onBeforeChange={() => {
+                              setSliderValue(timestamp);
+                              client?.send(
+                                JSON.stringify({
+                                  type: typeDefinition.PAUSE,
+                                })
+                              );
+                              setSliderInteraction(true);
+                            }}
+                            onAfterChange={async () => {
+                              setSliderInteraction(false);
+                              setTimeout(() => {
+                                client?.send(
+                                  JSON.stringify({
+                                    type: typeDefinition.PLAY,
+                                  })
+                                );
+                              }, 250);
+                            }}
+                            onChange={(value) => {
+                              const sendData = async () => {
+                                client?.send(
+                                  JSON.stringify({
+                                    type: typeDefinition.TIME_UPDATE,
+                                    timestamp: value,
+                                  })
+                                );
+                              };
+                              setSliderValue(value as number);
+                              setTimeout(sendData, 250);
+                            }}
+                            style={{ width: "80%", margin: "0 auto" }}
+                          />
+                          {playerStatus != "idle" ? (
+                            <>
+                              {" "}
+                              <div className="m-2">
+                                {previousSongs.length > 1 ? (
+                                  <Button
+                                    className="mx-1"
+                                    onClick={() => {
+                                      if (!wsBusy) {
+                                      }
+                                    }}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faBackwardFast}
+                                      size="2x"
+                                    ></FontAwesomeIcon>
+                                  </Button>
+                                ) : null}
+                                {playerStatus == "paused" ? (
+                                  <Button
+                                    className="mx-1"
+                                    onClick={() => {
+                                      if (!wsBusy)
+                                        client?.send(
+                                          JSON.stringify({
+                                            type: typeDefinition.PLAY,
+                                          })
+                                        );
+                                    }}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faPlay}
+                                      size="2x"
+                                    ></FontAwesomeIcon>
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    className="mx-1"
+                                    onClick={() => {
+                                      if (!wsBusy)
+                                        client?.send(
+                                          JSON.stringify({
+                                            type: typeDefinition.PAUSE,
+                                          })
+                                        );
+                                    }}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faPause}
+                                      size="2x"
+                                    ></FontAwesomeIcon>
+                                  </Button>
+                                )}
+                                <Button
+                                  className="mx-1"
+                                  onClick={() => {
+                                    if (!wsBusy) {
+                                      client?.send(
+                                        JSON.stringify({
+                                          type: typeDefinition.TIME_UPDATE,
+                                          timestamp: maxTimestamp + 999999,
+                                        })
+                                      );
+                                      client?.send(
+                                        JSON.stringify({
+                                          type: typeDefinition.PAUSE,
+                                        })
+                                      );
+                                    }
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faForwardFast}
+                                    size="2x"
+                                  ></FontAwesomeIcon>
+                                </Button>
+                              </div>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       <div className="text-center login-container">
