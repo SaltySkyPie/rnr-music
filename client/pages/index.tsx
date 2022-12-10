@@ -656,12 +656,25 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         onClick={() => {
                           setModalShow(false);
                           setJoined(true);
+                          setController(true);
                           router.push({ pathname: "/", query: {} }, undefined, {
                             shallow: true,
                           });
                         }}
                       >
-                        Join
+                        Join as Controller
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setModalShow(false);
+                          setJoined(true);
+                          setController(false);
+                          router.push({ pathname: "/", query: {} }, undefined, {
+                            shallow: true,
+                          });
+                        }}
+                      >
+                        Join as Player
                       </Button>
                       <Button
                         onClick={() => {
