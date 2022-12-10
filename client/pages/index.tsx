@@ -244,6 +244,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             break;
           default:
             setMuted(true);
+            setPlayerStatus("paused");
             if (!(dat.type == "pause" || dat.type == "play")) {
               setAudioLoading(true);
             }
