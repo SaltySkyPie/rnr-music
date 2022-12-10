@@ -191,6 +191,12 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     }
   }, [client, joined]);
 
+  useEffect(() => {
+    if(!joined) {
+      setTitle("TŠ TWIST MUSIC SYSTEM");
+    }
+  },[joined])
+
   // login user to WS server after connection
   const logInUser = () => {
     const username = data!.user!.name!;
