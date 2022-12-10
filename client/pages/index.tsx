@@ -221,7 +221,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
       if (controller) {
         setInterval(() => {
           client?.send(JSON.stringify({ type: typeDefinition.GET }));
-        }, 500);
+        }, 1000);
       }
       client!.onmessage = (message: any) => {
         setWsBusy(true);
@@ -346,7 +346,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           rap = element;
                         }}
                         url={currentSongUrl}
-                        progressInterval={100}
+                        progressInterval={250}
                         stopOnUnmount={false}
                         playing={playerStatus == "playing" ? true : false}
                         controls={true}
