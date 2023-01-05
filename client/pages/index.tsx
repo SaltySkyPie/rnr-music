@@ -27,6 +27,57 @@ let remoteMusicLoc = "file:///home/saltyskypie/Music/";
 const wsHost = "wss://skippies.fun/music/ws";
 //const wsHost = "ws://localhost:8081";
 
+const languages = {
+  en: {
+    title: "TŠ TWIST MUSIC SYSTEM",
+    select_song: "Select a song!",
+    login_provider: "Login with:",
+    login_as: "Logged in as",
+    logout: "Logout",
+    leave: "Leave",
+    categories: "Categories",
+    loading: "Loading...",
+    session_joining: "Joining session ",
+    logging_in: "Logging in...",
+    updating_song_listing: "Updating song listing...",
+    session_join: "Join session",
+    invite: "You were invited to join session",
+    different_session: "Start or join different session",
+    jplayer: "Join as Player",
+    jcontroller: "Join as Controller",
+    cplayer: "Create session & Join as Player",
+    ccontroller: "Create session & Join as Controller",
+    connect_lose: "Connection lost.",
+    reconnect: "Reconnect",
+    cancel: "Cancel",
+    welcome_back: "Welcome back ",
+  },
+  cs: {
+    title: "TŠ TWIST, systém pro přehrávání hudby",
+    select_song: "Zvolte hudbu!",
+    login_provider: "Přihlásit se pomocí:",
+    login_as: "Přihlášen jako",
+    logout: "Odhlásit se",
+    leave: "Zpět",
+    categories: "Kategorie",
+    loading: "Načítání...",
+    session_joining: "Připojování k relaci ",
+    logging_in: "Přihlašování...",
+    updating_song_listing: "Aktualizace seznamů skladeb...",
+    session_join: "Připojit k relaci",
+    invite: "Pozvánka k relaci",
+    different_session: "Vytvořit nebo se připojit k jiné relaci",
+    jplayer: "Připojit se v módu přehrávač",
+    jcontroller: "Připojit se v módu ovladač",
+    cplayer: "Vytvořit relaci & Připojit se v módu přehrávač",
+    ccontroller: "Vytvořit relaci & Připojit se v módu ovladač",
+    connect_lose: "Bylo ztraceno připojení k serveru.",
+    reconnect: "Opětovné připojení",
+    cancel: "Zrušit",
+    welcome_back: "Vítej zpět, ",
+  },
+};
+
 export async function getStaticProps(ctx: any) {
   const { req, query, res, asPath, pathname } = ctx;
   let host = "";
@@ -52,10 +103,11 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
     return Math.floor(1000 + Math.random() * 9000);
   };
 
+  const [language, setLanguage] = useState<any>(languages.en);
   const [joined, setJoined] = useState(false);
   const [timestamp, setTimestamp] = useState(0);
   const [maxTimestamp, setMaxTimestamp] = useState(0);
-  const [currentSong, setCurrentSong] = useState("Select a song!");
+  const [currentSong, setCurrentSong] = useState(language.select_song);
   const [songList, setSongList] = useState<any>(false);
   const [currentSongUrl, setCurrentSongUrl] = useState("");
   const [playerStatus, setPlayerStatus] = useState<
@@ -77,7 +129,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   const [categories, setCategories] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const [audioLoading, setAudioLoading] = useState(true);
-  const [title, setTitle] = useState("TŠ TWIST MUSIC SYSTEM");
+  const [title, setTitle] = useState(language.title as string);
   const [muted, setMuted] = useState(true);
   const [controller, setController] = useState(false);
   const [afterSongUpdate, setAfterSongUpdate] = useState(false);
@@ -167,7 +219,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         });
       };
       client!.onerror = () => {
-        toast.error("Lost connection to the server. :(", { duration: 1000 });
+        toast.error(language.connect_lose + " :(", { duration: 1000 });
         setJoined(false);
         setWsReady(false);
         setWsLogin(false);
@@ -192,10 +244,10 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
   }, [client, joined]);
 
   useEffect(() => {
-    if(!joined) {
-      setTitle("TŠ TWIST MUSIC SYSTEM");
+    if (!joined) {
+      setTitle(language.title);
     }
-  },[joined])
+  }, [joined]);
 
   // login user to WS server after connection
   const logInUser = () => {
@@ -296,7 +348,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         .replace("/", " | ");
       //rap.audioEl.current.title = title;
       setCurrentSong(stitle);
-      setTitle(stitle + " - TŠ TWIST MUSIC SYSTEM");
+      setTitle(stitle + " - " + language.title);
     }
   }, [currentSongUrl]);
 
@@ -311,10 +363,10 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
             <>
               <div className="text-center my-5">
                 <Image src="/logo.png"></Image>
-                <h1>TŠ TWIST MUSIC SYSTEM</h1>
+                <h1>{language.title}</h1>
               </div>
               <div className="text-center">
-                <h2>Login with:</h2>
+                <h2>{language.login_provider}</h2>
                 <div className="my-3">
                   <FontAwesomeIcon
                     icon={faFacebook}
@@ -332,6 +384,24 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       signIn("google");
                     }}
                   ></FontAwesomeIcon>
+                </div>
+                <div>
+                  <Button
+                    onClick={() => {
+                      setLanguage(languages.en);
+                    }}
+                    className="mx-1"
+                  >
+                    English
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setLanguage(languages.cs);
+                    }}
+                    className="mx-1"
+                  >
+                    Čeština
+                  </Button>
                 </div>
               </div>
             </>
@@ -418,7 +488,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                         <div className="text-center my-4 container">
                           <p>
                             {playerStatus == "idle"
-                              ? "Select a song!"
+                              ? language.select_song
                               : currentSong}
                           </p>
                           <h1>
@@ -558,14 +628,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                       </div>
                       <div className="text-center login-container">
                         <p>
-                          Logged in as {data?.user?.name}{" "}
+                          {language.login_as} {data?.user?.name}{" "}
                           <Button
                             onClick={() => {
                               signOut();
                             }}
                             size="sm"
                           >
-                            Logout
+                            {language.logout}
                           </Button>
                         </p>
                         <p>
@@ -589,13 +659,13 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                             }}
                             size="sm"
                           >
-                            Leave
+                            {language.leave}
                           </Button>
                         </p>
                       </div>
                       <Navbar expand="lg" style={{ position: "static" }}>
                         <Container>
-                          <Navbar.Brand>Categories</Navbar.Brand>
+                          <Navbar.Brand>{language.categories}</Navbar.Brand>
                           <Navbar.Toggle />
                           <Navbar.Collapse className="justify-content-end">
                             <Nav className="mw-auto">
@@ -626,14 +696,16 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     <>
                       <div className="absolute-center">
                         <div className="text-center">
-                          <div className="loader">Loading...</div>
+                          <div className="loader">{language.loading}</div>
                           {!wsReady && !wsLogin ? (
-                            <p>Joining session {sessionId}...</p>
+                            <p>
+                              {language.session_joining} {sessionId}...
+                            </p>
                           ) : (
-                            <p>Logging in...</p>
+                            <p>{language.logging_in}</p>
                           )}
                           {!songsLoaded ? (
-                            <p>Updating song listing...</p>
+                            <p>{language.updating_song_listing}</p>
                           ) : null}
                         </div>
                       </div>
@@ -650,12 +722,13 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     centered
                   >
                     <Modal.Header>
-                      <Modal.Title>Join session {sessionId}?</Modal.Title>
+                      <Modal.Title>
+                        {language.session_join} {sessionId}?
+                      </Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
                       <p>
-                        You were invited to join session {sessionId}. Do you
-                        wanna join?
+                        {language.invite} {sessionId}.
                       </p>
                     </Modal.Body>
                     <Modal.Footer>
@@ -669,7 +742,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Join as Controller
+                        {language.jcontroller}
                       </Button>
                       <Button
                         onClick={() => {
@@ -681,14 +754,14 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Join as Player
+                        {language.jplayer}
                       </Button>
                       <Button
                         onClick={() => {
                           setModalShow(false);
                         }}
                       >
-                        Start different session
+                        {language.different_session}
                       </Button>
                     </Modal.Footer>
                   </Modal>
@@ -700,7 +773,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                     centered
                   >
                     <Modal.Header>
-                      <Modal.Title>Connection lost.</Modal.Title>
+                      <Modal.Title>{language.connect_lose}</Modal.Title>
                     </Modal.Header>
                     <Modal.Footer>
                       <Button
@@ -709,7 +782,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           setJoined(true);
                         }}
                       >
-                        Reconnect
+                        {language.reconnect}
                       </Button>
                       <Button
                         onClick={() => {
@@ -717,12 +790,15 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           setShowError(false);
                         }}
                       >
-                        Cancel
+                        {language.cancel}
                       </Button>
                     </Modal.Footer>
                   </Modal>
                   <div className="text-center my-5 container">
-                    <h1>Welcome back {data?.user?.name}!</h1>
+                    <h1>
+                      {language.welcome_back}
+                      {data?.user?.name}!
+                    </h1>
                     <div className="text-center my-3">
                       <Button
                         className="mx-1"
@@ -735,7 +811,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Create Session & Join as Player
+                        {language.cplayer}
                       </Button>
                       <Button
                         className="mx-1"
@@ -748,7 +824,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Create Session & Join as Controller
+                        {language.ccontroller}
                       </Button>{" "}
                     </div>
                     <div className="text-center my-3">
@@ -777,7 +853,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Join Session as Player
+                        {language.jplayer}
                       </Button>
                       <Button
                         className="mx-1"
@@ -795,20 +871,38 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
                           });
                         }}
                       >
-                        Join Session as Controller
+                        {language.jcontroller}
                       </Button>
                     </div>
                     <p>
-                      Logged in as {data?.user?.name}{" "}
+                      {language.login_as} {data?.user?.name}{" "}
                       <Button
                         onClick={() => {
                           signOut();
                         }}
                         size="sm"
                       >
-                        Logout
+                        {language.logout}
                       </Button>
                     </p>
+                    <div>
+                      <Button
+                        onClick={() => {
+                          setLanguage(languages.en);
+                        }}
+                        className="mx-1"
+                      >
+                        English
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setLanguage(languages.cs);
+                        }}
+                        className="mx-1"
+                      >
+                        Čeština
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
@@ -819,7 +913,7 @@ const Home: NextPage = ({ remoteMusic, host }: any) => {
         <>
           <div className="absolute-center">
             <div className="text-center">
-              <div className="loader">Loading...</div>
+              <div className="loader">{language.logout}</div>
             </div>
           </div>
         </>
